@@ -22,14 +22,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
       
       - name: Install dependencies
-        run: npm install  # Changed from npm ci
+        run: npm install
       
-      - name: Build with API key
+      - name: Build with environment variables
         env:
           VITE_NEBIUS_API_KEY: ${{ secrets.NEBIUS_API_KEY }}
-        run: npm run build
+        run: |
+          echo "Building with API key..."
+          npm run build
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
