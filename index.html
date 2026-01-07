@@ -4,8 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VibePHP - AI PHP Generator</title>
+    
+    <!-- Buffer Polyfill - MUST BE FIRST -->
+    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
+    <script>
+      // Make Buffer available globally for OpenAI SDK
+      if (typeof window !== 'undefined') {
+        window.Buffer = buffer.Buffer;
+        console.log('[VibePHP] Buffer polyfill loaded');
+      }
+    </script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
     <script>
       tailwind.config = {
         theme: {
@@ -28,6 +40,7 @@
         },
       }
     </script>
+    
     <style>
       body {
         background-color: #0b0c0e;
@@ -35,6 +48,7 @@
         margin: 0;
         overflow: hidden;
       }
+      
       /* Custom scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
@@ -50,6 +64,7 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #3e4451; 
       }
+      
       #error-overlay {
         display: none;
         position: fixed;
@@ -65,23 +80,9 @@
         font-family: 'Fira Code', monospace;
       }
     </style>
+    
     <script>
-      // 1. GLOBAL SHIMS (Critical for AI SDKs in browser)
-      window.process = window.process || {};
-      window.process.env = window.process.env || {};
-      window.process.env.NODE_ENV = 'production';
-      window.global = window;
-      
-      // Simple Buffer Polyfill
-      if (!window.Buffer) {
-        window.Buffer = {
-          isBuffer: () => false,
-          from: (data) => new Uint8Array(data),
-          alloc: (size) => new Uint8Array(size)
-        };
-      }
-
-      // 2. ERROR HANDLING
+      // Global error handlers
       function showError(title, message, details) {
         const overlay = document.getElementById('error-overlay');
         const content = document.getElementById('error-content');
@@ -99,33 +100,42 @@
       
       window.addEventListener('error', function(e) {
         if (e.target && e.target.id === 'error-overlay') return;
-        console.error(e);
+        console.error('[VibePHP] Error:', e);
         showError('Runtime Error', e.message, `${e.filename}:${e.lineno}:${e.colno}\n\n${e.error?.stack || ''}`);
       });
 
       window.addEventListener('unhandledrejection', function(e) {
-        console.error(e);
+        console.error('[VibePHP] Unhandled Promise:', e);
         showError('Unhandled Promise Rejection', e.reason?.message || String(e.reason), e.reason?.stack);
       });
+      
+      // Additional global shims for Node.js compatibility
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      window.process.env.NODE_ENV = 'production';
+      window.global = window;
+      
+      console.log('[VibePHP] Environment initialized');
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react/": "https://esm.sh/react@18.2.0/",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "@google/genai": "https://esm.sh/@google/genai@latest"
-  }
-}
-</script>
-</head>
+    
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react/": "https://esm.sh/react@18.2.0/",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="error-overlay">
       <h1 class="text-2xl font-bold mb-4 text-white">Application Error</h1>
       <div id="error-content"></div>
     </div>
+    
     <div id="root">
       <div style="display:flex; justify-content:center; align-items:center; height:100vh; color:#e1e4e8; font-family: sans-serif; flex-direction: column; gap: 1rem;">
         <div style="width: 24px; height: 24px; border: 2px solid #e1e4e8; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
@@ -137,6 +147,7 @@
         }
       </style>
     </div>
+    
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
