@@ -17,7 +17,7 @@ export const generateAppCode = async (
 ): Promise<GeneratedFilesResponse> => {
   
   // Get API key from parameter (passed from App component)
-  const apiKey = userApiKey;
+  const apiKey = import.meta.env.VITE_NEBIUS_API_KEY || userApiKey;
   
   if (!apiKey) {
     throw new Error(
