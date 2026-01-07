@@ -7,7 +7,7 @@ import { MODEL_NAME, SYSTEM_INSTRUCTION } from '../constants';
  * @param prompt - User's request
  * @param currentFiles - Current file state
  * @param history - Conversation history
- * @param userApiKey - API key from user (stored in localStorage)
+ * @param userApiKey - API key from user (stored in localStorage) - OPTIONAL if env var exists
  */
 export const generateAppCode = async (
   prompt: string, 
@@ -16,7 +16,8 @@ export const generateAppCode = async (
   userApiKey?: string
 ): Promise<GeneratedFilesResponse> => {
   
-  // Get API key from parameter (passed from App component)
+  // PRIORITY 1: Use environment variable (from GitHub Secret)
+  // PRIORITY 2: Use user-provided key (from localStorage)
   const apiKey = import.meta.env.VITE_NEBIUS_API_KEY || userApiKey;
   
   if (!apiKey) {
@@ -27,11 +28,13 @@ export const generateAppCode = async (
     );
   }
 
+  console.log('[VibePHP] Using API key from:', import.meta.env.VITE_NEBIUS_API_KEY ? 'environment' : 'user input');
+
   // Initialize OpenAI client with Nebius endpoint
   const client = new OpenAI({
     baseURL: 'https://api.tokenfactory.nebius.com/v1/',
     apiKey: apiKey,
-    dangerouslyAllowBrowser: true // Required for browser environment
+    dangerouslyAllowBrowser: true
   });
   
   // Build file context for the AI
@@ -94,7 +97,7 @@ JSON Schema:
       throw new Error("No content received from Nebius API");
     }
     
-    // Clean up the response (remove markdown if present)
+    // Clean up the response
     let cleanJson = content.trim();
     
     // Remove markdown code blocks
@@ -109,7 +112,6 @@ JSON Schema:
     try {
       const data = JSON.parse(cleanJson) as GeneratedFilesResponse;
       
-      // Validate response structure
       if (!data.files || !Array.isArray(data.files)) {
         throw new Error("Invalid response: missing 'files' array");
       }
@@ -138,7 +140,7 @@ JSON Schema:
       throw new Error(
         "Invalid API Key\n\n" +
         "Your Nebius API key is incorrect or expired.\n\n" +
-        "Please update your API key in settings.\n" +
+        "Please update your API key in GitHub Secrets or settings.\n" +
         "Get a new key at: https://studio.nebius.ai"
       );
     }
