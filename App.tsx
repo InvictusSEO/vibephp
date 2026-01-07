@@ -22,11 +22,27 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('code');
   
+  // API Key management
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState('');
+  
   // Mobile specific state
   const [mobileTab, setMobileTab] = useState<'chat' | 'ide'>('chat');
-  const [showFileExplorer, setShowFileExplorer] = useState(true); // Default true for desktop
+  const [showFileExplorer, setShowFileExplorer] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load API key from localStorage on mount
+  useEffect(() => {
+    const savedKey = localStorage.getItem('nebius_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    } else {
+      // Show modal if no key found
+      setShowApiKeyModal(true);
+    }
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,16 +52,38 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Auto-hide file explorer on mobile on initial load
   useEffect(() => {
     if (window.innerWidth < 768) {
       setShowFileExplorer(false);
     }
   }, []);
 
+  const handleSaveApiKey = () => {
+    if (tempApiKey.trim()) {
+      localStorage.setItem('nebius_api_key', tempApiKey.trim());
+      setApiKey(tempApiKey.trim());
+      setShowApiKeyModal(false);
+      setTempApiKey('');
+      
+      // Show success message
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: '✅ API Key saved! You can now start building your PHP apps.',
+        timestamp: Date.now()
+      }]);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!prompt.trim() || isGenerating) return;
+
+    // Check if API key exists
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -69,7 +107,8 @@ function App() {
       };
       setMessages(prev => [...prev, loadingMsg]);
 
-      const data = await generateAppCode(userMsg.content, files, messages);
+      // Pass the API key to the service
+      const data = await generateAppCode(userMsg.content, files, messages, apiKey);
       
       const newFiles = [...files];
       data.files.forEach(generatedFile => {
@@ -88,7 +127,6 @@ function App() {
       
       setViewMode('preview');
       
-      // On mobile, auto-switch to IDE view when code is generated
       if (window.innerWidth < 768) {
         setMobileTab('ide');
       }
@@ -103,14 +141,14 @@ function App() {
         }];
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
       setMessages(prev => {
          const filtered = prev.filter(m => !m.isLoading);
          return [...filtered, {
            id: Date.now().toString(),
            role: 'assistant',
-           content: "Sorry, I encountered an error generating the code. Please try again.",
+           content: `❌ Error: ${error.message}`,
            timestamp: Date.now()
          }];
       });
@@ -135,6 +173,69 @@ function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-bolt-dark text-bolt-text overflow-hidden font-sans">
+      
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-bolt-gray border border-bolt-border rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
+                🔑
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">API Key Required</h2>
+              <p className="text-bolt-text text-sm">
+                VibePHP uses Nebius AI to generate code. Enter your API key to get started.
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-bolt-text mb-2">
+                  Nebius API Key
+                </label>
+                <input
+                  type="password"
+                  value={tempApiKey}
+                  onChange={(e) => setTempApiKey(e.target.value)}
+                  placeholder="Enter your API key..."
+                  className="w-full bg-bolt-dark border border-bolt-border rounded-lg px-4 py-3 text-bolt-text focus:outline-none focus:border-bolt-accent focus:ring-2 focus:ring-bolt-accent/50 transition-all"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && tempApiKey.trim()) {
+                      handleSaveApiKey();
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={!tempApiKey.trim()}
+                  className="flex-1 bg-bolt-accent hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/20"
+                >
+                  Save & Continue
+                </button>
+                <a
+                  href="https://studio.nebius.ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 bg-bolt-hover hover:bg-bolt-border text-white font-semibold py-3 px-4 rounded-lg transition-all text-center border border-bolt-border"
+                >
+                  Get API Key
+                </a>
+              </div>
+              
+              <div className="bg-bolt-dark/50 border border-bolt-border/50 rounded-lg p-3">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  🔒 Your API key is stored locally in your browser and never sent anywhere except directly to Nebius API. We don't collect or store your key on any server.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="h-14 border-b border-bolt-border flex items-center justify-between px-4 lg:px-6 bg-bolt-gray shrink-0 z-30">
         <div className="flex items-center gap-3">
@@ -158,14 +259,27 @@ function App() {
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
-           <button 
-             onClick={downloadCode}
-             className="px-3 py-1.5 text-xs font-medium bg-bolt-hover hover:bg-bolt-border border border-bolt-border rounded-full transition-all flex items-center gap-2 text-white hover:text-blue-400"
-           >
-             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-             <span className="hidden sm:inline">Download</span>
-           </button>
+        <div className="flex items-center gap-2">
+          {apiKey && (
+            <button
+              onClick={() => {
+                setTempApiKey(apiKey);
+                setShowApiKeyModal(true);
+              }}
+              className="px-3 py-1.5 text-xs font-medium bg-bolt-hover hover:bg-bolt-border border border-bolt-border rounded-full transition-all text-gray-400 hover:text-white flex items-center gap-1.5"
+              title="Change API Key"
+            >
+              🔑
+              <span className="hidden sm:inline">API Key</span>
+            </button>
+          )}
+          <button 
+            onClick={downloadCode}
+            className="px-3 py-1.5 text-xs font-medium bg-bolt-hover hover:bg-bolt-border border border-bolt-border rounded-full transition-all flex items-center gap-2 text-white hover:text-blue-400"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            <span className="hidden sm:inline">Download</span>
+          </button>
         </div>
       </header>
 
@@ -201,10 +315,11 @@ function App() {
                   }}
                   placeholder="Describe your PHP app..."
                   className="w-full bg-bolt-dark border border-bolt-border rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-bolt-accent focus:ring-1 focus:ring-bolt-accent resize-none h-24 custom-scrollbar transition-all placeholder-gray-600"
+                  disabled={!apiKey}
                 />
                 <button 
                   type="submit"
-                  disabled={!prompt.trim() || isGenerating}
+                  disabled={!prompt.trim() || isGenerating || !apiKey}
                   className="absolute right-3 bottom-3 p-2 bg-bolt-accent text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-blue-500/20"
                 >
                   {isGenerating ? (
@@ -251,24 +366,22 @@ function App() {
                 </button>
               </div>
 
-              <div className="w-8"></div> {/* Spacer for balance */}
+              <div className="w-8"></div>
            </div>
 
            {/* Workspace Content */}
            <div className="flex-1 overflow-hidden relative flex flex-row">
               {viewMode === 'code' ? (
                 <>
-                  {/* File Explorer - Responsive */}
                   <div className={`
                     absolute md:static z-10 h-full bg-bolt-gray border-r border-bolt-border transition-all duration-200
                     ${showFileExplorer ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 overflow-hidden border-none'}
                   `}>
-                     <div className="w-64 h-full"> {/* Inner container to maintain width during animation */}
+                     <div className="w-64 h-full">
                       <FileExplorer files={files} activeFile={activeFile} onSelectFile={(f) => { setActiveFile(f); if(window.innerWidth < 768) setShowFileExplorer(false); }} />
                      </div>
                   </div>
                   
-                  {/* Backdrop for mobile file explorer */}
                   {showFileExplorer && (
                     <div 
                       className="absolute inset-0 bg-black/50 z-0 md:hidden"
