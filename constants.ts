@@ -1,6 +1,6 @@
 import type { File } from './types';
 
-export const MODEL_NAME = 'gemini-3-pro-preview';
+export const MODEL_NAME = 'zai-org/GLM-4.5';
 
 export const SYSTEM_INSTRUCTION = `
 You are VibePHP, an expert Full Stack PHP Developer AI.
