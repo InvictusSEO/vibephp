@@ -33,14 +33,26 @@ function App() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load API key from localStorage on mount
+  // Load API key on mount - prioritize environment variable
   useEffect(() => {
-    const savedKey = localStorage.getItem('nebius_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
+    // PRIORITY 1: Check environment variable (from GitHub Secret)
+    const envKey = import.meta.env.VITE_NEBIUS_API_KEY;
+    
+    if (envKey) {
+      console.log('[VibePHP] Using API key from environment variable');
+      setApiKey(envKey);
+      // Don't show modal - we have a key from GitHub Secret
     } else {
-      // Show modal if no key found
-      setShowApiKeyModal(true);
+      // PRIORITY 2: Check localStorage (user-provided key)
+      const savedKey = localStorage.getItem('nebius_api_key');
+      if (savedKey) {
+        console.log('[VibePHP] Using API key from localStorage');
+        setApiKey(savedKey);
+      } else {
+        // No key found anywhere - show modal
+        console.log('[VibePHP] No API key found, showing modal');
+        setShowApiKeyModal(true);
+      }
     }
   }, []);
 
@@ -65,7 +77,6 @@ function App() {
       setShowApiKeyModal(false);
       setTempApiKey('');
       
-      // Show success message
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
@@ -79,8 +90,10 @@ function App() {
     e?.preventDefault();
     if (!prompt.trim() || isGenerating) return;
 
-    // Check if API key exists
-    if (!apiKey) {
+    // Check if we have API key from either source
+    const effectiveApiKey = import.meta.env.VITE_NEBIUS_API_KEY || apiKey;
+    
+    if (!effectiveApiKey) {
       setShowApiKeyModal(true);
       return;
     }
@@ -107,7 +120,7 @@ function App() {
       };
       setMessages(prev => [...prev, loadingMsg]);
 
-      // Pass the API key to the service
+      // Pass the API key (environment variable takes priority in the service)
       const data = await generateAppCode(userMsg.content, files, messages, apiKey);
       
       const newFiles = [...files];
@@ -171,11 +184,14 @@ function App() {
     });
   };
 
+  // Check if we're using environment variable (for UI display)
+  const usingEnvKey = !!import.meta.env.VITE_NEBIUS_API_KEY;
+
   return (
     <div className="flex flex-col h-[100dvh] bg-bolt-dark text-bolt-text overflow-hidden font-sans">
       
-      {/* API Key Modal */}
-      {showApiKeyModal && (
+      {/* API Key Modal - Only show if no environment variable AND no localStorage key */}
+      {showApiKeyModal && !usingEnvKey && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-bolt-gray border border-bolt-border rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="text-center mb-6">
@@ -228,7 +244,7 @@ function App() {
               
               <div className="bg-bolt-dark/50 border border-bolt-border/50 rounded-lg p-3">
                 <p className="text-xs text-gray-400 leading-relaxed">
-                  🔒 Your API key is stored locally in your browser and never sent anywhere except directly to Nebius API. We don't collect or store your key on any server.
+                  🔒 Your API key is stored locally in your browser and never sent anywhere except directly to Nebius API.
                 </p>
               </div>
             </div>
@@ -243,7 +259,6 @@ function App() {
           <h1 className="font-bold text-lg tracking-tight text-white hidden sm:block">VibePHP</h1>
         </div>
 
-        {/* Mobile View Switcher */}
         <div className="flex md:hidden bg-bolt-dark p-1 rounded-lg border border-bolt-border">
           <button 
             onClick={() => setMobileTab('chat')}
@@ -260,7 +275,8 @@ function App() {
         </div>
 
         <div className="flex items-center gap-2">
-          {apiKey && (
+          {/* Only show API key button if NOT using environment variable */}
+          {!usingEnvKey && apiKey && (
             <button
               onClick={() => {
                 setTempApiKey(apiKey);
@@ -272,6 +288,13 @@ function App() {
               🔑
               <span className="hidden sm:inline">API Key</span>
             </button>
+          )}
+          {/* Show indicator if using environment variable */}
+          {usingEnvKey && (
+            <div className="px-3 py-1.5 text-xs font-medium bg-green-900/30 border border-green-700/50 rounded-full text-green-400 flex items-center gap-1.5">
+              ✓
+              <span className="hidden sm:inline">API Key Configured</span>
+            </div>
           )}
           <button 
             onClick={downloadCode}
@@ -293,7 +316,6 @@ function App() {
           ${mobileTab === 'chat' ? 'flex' : 'hidden'}
           w-full md:w-[350px] lg:w-[400px]
         `}>
-           {/* Messages Area */}
            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4">
               {messages.map(msg => (
                 <ChatMessage key={msg.id} message={msg} />
@@ -301,7 +323,6 @@ function App() {
               <div ref={messagesEndRef} />
            </div>
 
-           {/* Input Area */}
            <div className="p-4 border-t border-bolt-border bg-bolt-gray/50 backdrop-blur-sm">
               <form onSubmit={handleSendMessage} className="relative group">
                 <textarea
@@ -315,11 +336,10 @@ function App() {
                   }}
                   placeholder="Describe your PHP app..."
                   className="w-full bg-bolt-dark border border-bolt-border rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-bolt-accent focus:ring-1 focus:ring-bolt-accent resize-none h-24 custom-scrollbar transition-all placeholder-gray-600"
-                  disabled={!apiKey}
                 />
                 <button 
                   type="submit"
-                  disabled={!prompt.trim() || isGenerating || !apiKey}
+                  disabled={!prompt.trim() || isGenerating}
                   className="absolute right-3 bottom-3 p-2 bg-bolt-accent text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-blue-500/20"
                 >
                   {isGenerating ? (
@@ -338,7 +358,6 @@ function App() {
           absolute inset-0 md:static md:flex
           ${mobileTab === 'ide' ? 'flex' : 'hidden'}
         `}>
-           {/* View Tabs */}
            <div className="h-10 border-b border-bolt-border bg-bolt-gray flex items-center px-2 justify-between shrink-0">
              <div className="flex items-center">
                 {viewMode === 'code' && (
@@ -369,7 +388,6 @@ function App() {
               <div className="w-8"></div>
            </div>
 
-           {/* Workspace Content */}
            <div className="flex-1 overflow-hidden relative flex flex-row">
               {viewMode === 'code' ? (
                 <>
