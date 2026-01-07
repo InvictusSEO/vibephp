@@ -1,0 +1,5 @@
+{
+  "name": "VibePHP - AI PHP App Generator",
+  "description": "A 'Bolt.new' style AI coding assistant specialized in generating PHP, HTML, CSS, and JS applications. Generate, view code, and download your full stack projects.",
+  "requestFramePermissions": []
+}

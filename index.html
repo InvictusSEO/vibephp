@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VibePHP - AI PHP Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              bolt: {
+                dark: '#0b0c0e',
+                gray: '#15171b',
+                hover: '#1f2228',
+                border: '#2a2e37',
+                text: '#e1e4e8',
+                accent: '#646cff',
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #0b0c0e;
+        color: #e1e4e8;
+        margin: 0;
+        overflow: hidden;
+      }
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0b0c0e; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #2a2e37; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3e4451; 
+      }
+      #error-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(10, 0, 0, 0.95);
+        color: #ff5555;
+        z-index: 9999;
+        padding: 2rem;
+        overflow: auto;
+        font-family: 'Fira Code', monospace;
+      }
+    </style>
+    <script>
+      // 1. GLOBAL SHIMS (Critical for AI SDKs in browser)
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      window.process.env.NODE_ENV = 'production';
+      window.global = window;
+      
+      // Simple Buffer Polyfill
+      if (!window.Buffer) {
+        window.Buffer = {
+          isBuffer: () => false,
+          from: (data) => new Uint8Array(data),
+          alloc: (size) => new Uint8Array(size)
+        };
+      }
+
+      // 2. ERROR HANDLING
+      function showError(title, message, details) {
+        const overlay = document.getElementById('error-overlay');
+        const content = document.getElementById('error-content');
+        if (overlay && content) {
+          overlay.style.display = 'block';
+          content.innerHTML += `
+            <div style="border-bottom: 1px solid #330000; padding-bottom: 1rem; margin-bottom: 1rem;">
+              <h2 style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem; color: #ff3333;">${title}</h2>
+              <p style="margin-bottom: 0.5rem;">${message}</p>
+              ${details ? `<pre style="background: #1a0000; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.875rem; color: #ffaaaa;">${details}</pre>` : ''}
+            </div>
+          `;
+        }
+      }
+      
+      window.addEventListener('error', function(e) {
+        if (e.target && e.target.id === 'error-overlay') return;
+        console.error(e);
+        showError('Runtime Error', e.message, `${e.filename}:${e.lineno}:${e.colno}\n\n${e.error?.stack || ''}`);
+      });
+
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error(e);
+        showError('Unhandled Promise Rejection', e.reason?.message || String(e.reason), e.reason?.stack);
+      });
+    </script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react/": "https://esm.sh/react@18.2.0/",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "@google/genai": "https://esm.sh/@google/genai@0.2.1"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="error-overlay">
+      <h1 class="text-2xl font-bold mb-4 text-white">Application Error</h1>
+      <div id="error-content"></div>
+    </div>
+    <div id="root">
+      <div style="display:flex; justify-content:center; align-items:center; height:100vh; color:#e1e4e8; font-family: sans-serif; flex-direction: column; gap: 1rem;">
+        <div style="width: 24px; height: 24px; border: 2px solid #e1e4e8; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <div style="font-family: 'Fira Code', monospace; font-size: 0.875rem; color: #888;">Initializing VibePHP...</div>
+      </div>
+      <style>
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      </style>
+    </div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
