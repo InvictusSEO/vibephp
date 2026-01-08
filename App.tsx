@@ -124,7 +124,15 @@ function App() {
       const data = await generateAppCode(userMsg.content, files, messages, apiKey);
       
       const newFiles = [...files];
+      
+      // Process generated files with safety filter
       data.files.forEach(generatedFile => {
+        // CRITICAL FIX: Ignore db_config.php if the AI tried to generate it
+        if (generatedFile.path === 'db_config.php') {
+          console.warn('[VibePHP] Blocked AI from overwriting db_config.php');
+          return;
+        }
+
         const index = newFiles.findIndex(f => f.path === generatedFile.path);
         const language = generatedFile.path.split('.').pop() || 'text';
         if (index >= 0) {
@@ -133,9 +141,13 @@ function App() {
           newFiles.push({ ...generatedFile, language });
         }
       });
-      setFiles(newFiles);
+
+      // Extra safety: Remove db_config.php if it somehow got into the list
+      const cleanFiles = newFiles.filter(f => f.path !== 'db_config.php');
       
-      const indexFile = newFiles.find(f => f.path === 'index.php' || f.path === 'index.html');
+      setFiles(cleanFiles);
+      
+      const indexFile = cleanFiles.find(f => f.path === 'index.php' || f.path === 'index.html');
       if (indexFile) setActiveFile(indexFile);
       
       setViewMode('preview');
@@ -172,6 +184,9 @@ function App() {
 
   const downloadCode = () => {
     files.forEach(file => {
+      // Don't download system files if we hide them
+      if (file.path === 'db_config.php') return;
+
       const blob = new Blob([file.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
