@@ -22,7 +22,11 @@ export async function streamPlan(
   const stream = await client.chat.completions.create({
     model: MODEL_NAME,
     messages: [
-      { role: "system", content: "You are a Senior PHP Architect. Create a detailed implementation plan using Markdown. Use bullet points. Be concise but technical." },
+      { 
+        role: "system", 
+        // CHANGED: We now force a FLAT structure to prevent "file not found" errors
+        content: "You are a PHP Prototyping Architect. Create a detailed implementation plan. CRITICAL: Use a FLAT file structure (everything in the root directory). Do not use /public or /app folders. Keep it simple and monolithic for the sandbox environment." 
+      },
       ...messages,
       { role: "user", content: prompt }
     ],
@@ -65,7 +69,6 @@ export async function generateCode(
     return JSON.parse(content);
   } catch (e) {
     console.error("JSON Parse Error", e);
-    // DeepSeek sometimes puts markdown around JSON
     const match = content.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]);
     throw new Error("Failed to parse code response");
@@ -83,7 +86,11 @@ export async function streamFixPlan(
   const stream = await client.chat.completions.create({
     model: MODEL_NAME,
     messages: [
-      { role: "system", content: "You are a PHP Debugger. Analyze the error and explain how to fix it in 3 bullet points." },
+      { 
+        role: "system", 
+        // CHANGED: Added context about the sandbox environment
+        content: "You are a PHP Debugger. Analyze the error. NOTE: The environment is a flat sandbox. 'db_config.php' is always in the root (./db_config.php). Explain how to fix the error in 3 bullet points." 
+      },
       { role: "user", content: `The PHP code crashed with this error:\n${error}\n\nHow do we fix it?` }
     ],
     stream: true
