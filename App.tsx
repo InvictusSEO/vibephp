@@ -7,6 +7,9 @@ import CodeEditor from './components/CodeEditor';
 import PreviewFrame from './components/PreviewFrame';
 import ChatMessage from './components/ChatMessage';
 
+// Backend URL for Health Checks
+const EXECUTOR_URL = 'https://streamingsites.eu.org/phpvibe-executor/index.php';
+
 function App() {
   const [files, setFiles] = useState<File[]>(INITIAL_FILES);
   const [activeFile, setActiveFile] = useState<File | null>(INITIAL_FILES[0]);
@@ -14,12 +17,13 @@ function App() {
     { 
       id: '1', 
       role: 'assistant', 
-      content: "Hi! I'm VibePHP. Describe the PHP app you want to build, and I'll generate the code for you.", 
+      content: "Hi! I'm VibePHP. Describe the app you want, and I'll build, test, and fix it automatically.", 
       timestamp: Date.now() 
     }
   ]);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(''); // "Building...", "Testing...", "Fixing..."
   const [viewMode, setViewMode] = useState<ViewMode>('code');
   
   // API Key management
@@ -27,48 +31,26 @@ function App() {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
   
-  // Mobile specific state
+  // UI State
   const [mobileTab, setMobileTab] = useState<'chat' | 'ide'>('chat');
   const [showFileExplorer, setShowFileExplorer] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load API key on mount - prioritize environment variable
+  // Load API key
   useEffect(() => {
-    // PRIORITY 1: Check environment variable (from GitHub Secret)
     const envKey = import.meta.env.VITE_NEBIUS_API_KEY;
-    
     if (envKey) {
-      console.log('[VibePHP] Using API key from environment variable');
       setApiKey(envKey);
-      // Don't show modal - we have a key from GitHub Secret
     } else {
-      // PRIORITY 2: Check localStorage (user-provided key)
       const savedKey = localStorage.getItem('nebius_api_key');
-      if (savedKey) {
-        console.log('[VibePHP] Using API key from localStorage');
-        setApiKey(savedKey);
-      } else {
-        // No key found anywhere - show modal
-        console.log('[VibePHP] No API key found, showing modal');
-        setShowApiKeyModal(true);
-      }
+      if (savedKey) setApiKey(savedKey);
+      else setShowApiKeyModal(true);
     }
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    if (window.innerWidth < 768) {
-      setShowFileExplorer(false);
-    }
-  }, []);
+  useEffect(() => { scrollToBottom(); }, [messages]);
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
   const handleSaveApiKey = () => {
     if (tempApiKey.trim()) {
@@ -76,117 +58,134 @@ function App() {
       setApiKey(tempApiKey.trim());
       setShowApiKeyModal(false);
       setTempApiKey('');
-      
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: '✅ API Key saved! You can now start building your PHP apps.',
-        timestamp: Date.now()
-      }]);
     }
   };
 
+  // --- THE AGENTIC LOOP ---
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!prompt.trim() || isGenerating) return;
 
-    // Check if we have API key from either source
     const effectiveApiKey = import.meta.env.VITE_NEBIUS_API_KEY || apiKey;
-    
-    if (!effectiveApiKey) {
-      setShowApiKeyModal(true);
-      return;
-    }
+    if (!effectiveApiKey) { setShowApiKeyModal(true); return; }
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: prompt,
-      timestamp: Date.now()
-    };
-
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: prompt, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     setPrompt('');
     setIsGenerating(true);
 
     try {
-      const loadingMsgId = (Date.now() + 1).toString();
-      const loadingMsg: Message = {
-        id: loadingMsgId,
-        role: 'assistant',
-        content: 'Thinking...',
-        timestamp: Date.now(),
-        isLoading: true
-      };
-      setMessages(prev => [...prev, loadingMsg]);
-
-      // Pass the API key (environment variable takes priority in the service)
-      const data = await generateAppCode(userMsg.content, files, messages, apiKey);
-      
-      const newFiles = [...files];
-      
-      // Process generated files with safety filter
-      data.files.forEach(generatedFile => {
-        // CRITICAL FIX: Ignore db_config.php if the AI tried to generate it
-        if (generatedFile.path === 'db_config.php') {
-          console.warn('[VibePHP] Blocked AI from overwriting db_config.php');
-          return;
-        }
-
-        const index = newFiles.findIndex(f => f.path === generatedFile.path);
-        const language = generatedFile.path.split('.').pop() || 'text';
-        if (index >= 0) {
-          newFiles[index] = { ...generatedFile, language };
-        } else {
-          newFiles.push({ ...generatedFile, language });
-        }
-      });
-
-      // Extra safety: Remove db_config.php if it somehow got into the list
-      const cleanFiles = newFiles.filter(f => f.path !== 'db_config.php');
-      
-      setFiles(cleanFiles);
-      
-      const indexFile = cleanFiles.find(f => f.path === 'index.php' || f.path === 'index.html');
-      if (indexFile) setActiveFile(indexFile);
-      
-      setViewMode('preview');
-      
-      if (window.innerWidth < 768) {
-        setMobileTab('ide');
-      }
-
-      setMessages(prev => {
-        const filtered = prev.filter(m => m.id !== loadingMsgId);
-        return [...filtered, {
-          id: (Date.now() + 2).toString(),
-          role: 'assistant',
-          content: data.explanation || "I've updated the code based on your request.",
-          timestamp: Date.now()
-        }];
-      });
+      // Start the Agent Loop
+      await runAgentLoop(userMsg.content, files, messages, effectiveApiKey);
 
     } catch (error: any) {
       console.error(error);
-      setMessages(prev => {
-         const filtered = prev.filter(m => !m.isLoading);
-         return [...filtered, {
-           id: Date.now().toString(),
-           role: 'assistant',
-           content: `❌ Error: ${error.message}`,
-           timestamp: Date.now()
-         }];
-      });
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(), role: 'assistant', content: `❌ Critical Error: ${error.message}`, timestamp: Date.now()
+      }]);
     } finally {
       setIsGenerating(false);
+      setStatusMessage('');
+    }
+  };
+
+  // Recursive function that Generates -> Tests -> Fixes
+  const runAgentLoop = async (
+    currentPrompt: string, 
+    currentFiles: File[], 
+    history: Message[], 
+    key: string, 
+    attempt = 1
+  ) => {
+    const MAX_ATTEMPTS = 3;
+    
+    // 1. GENERATE
+    setStatusMessage(attempt === 1 ? 'Building App...' : `Fixing Error (Attempt ${attempt}/${MAX_ATTEMPTS})...`);
+    
+    // Add a temporary "Thinking" message
+    const thinkingId = Date.now().toString();
+    setMessages(prev => [...prev, { id: thinkingId, role: 'assistant', content: statusMessage, timestamp: Date.now(), isLoading: true }]);
+
+    const data = await generateAppCode(currentPrompt, currentFiles, history, key);
+    
+    // Update Files State & Filter db_config
+    let newFiles = [...currentFiles];
+    data.files.forEach(f => {
+      if (f.path === 'db_config.php') return; 
+      const idx = newFiles.findIndex(existing => existing.path === f.path);
+      if (idx >= 0) newFiles[idx] = { ...f, language: 'php' };
+      else newFiles.push({ ...f, language: 'php' });
+    });
+    newFiles = newFiles.filter(f => f.path !== 'db_config.php');
+    setFiles(newFiles);
+
+    // 2. TEST (Deploy to Backend to check for Syntax/Fatal Errors)
+    setStatusMessage('Verifying Code...');
+    
+    // Use consistent session ID for the check (Shared with PreviewFrame via sessionStorage)
+    let sessionId = sessionStorage.getItem('vibephp_session_id');
+    if (!sessionId) {
+      sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      sessionStorage.setItem('vibephp_session_id', sessionId);
+    }
+
+    const deployResponse = await fetch(EXECUTOR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: newFiles, sessionId: sessionId, dryRun: true })
+    });
+
+    const deployResult = await deployResponse.json();
+
+    // Remove the "Thinking" message
+    setMessages(prev => prev.filter(m => m.id !== thinkingId));
+
+    // 3. DECIDE
+    if (deployResult.success === false && attempt < MAX_ATTEMPTS) {
+      // ERROR FOUND -> AUTO FIX
+      console.log(`[Auto-Fix] Error detected: ${deployResult.error}`);
+      
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `⚠️ I detected an error: "${deployResult.error}". Fixing it automatically...`,
+        timestamp: Date.now()
+      }]);
+
+      // Recursive Call with Error Prompt
+      const fixPrompt = `The previous code had a PHP error: "${deployResult.error}". Please fix the code. Return the full fixed files.`;
+      
+      // Update history
+      const updatedHistory = [
+        ...history, 
+        { role: 'user', content: currentPrompt },
+        { role: 'assistant', content: JSON.stringify(data) } 
+      ] as Message[];
+
+      await runAgentLoop(fixPrompt, newFiles, updatedHistory, key, attempt + 1);
+
+    } else {
+      // SUCCESS or MAX RETRIES REACHED
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: deployResult.success 
+          ? (data.explanation || "App built successfully!") 
+          : `I tried to fix the errors but hit the limit. Error: ${deployResult.error}`,
+        timestamp: Date.now()
+      }]);
+      
+      const entry = newFiles.find(f => f.path === 'index.php');
+      if (entry) setActiveFile(entry);
+
+      setViewMode('preview');
+      if (window.innerWidth < 768) setMobileTab('ide');
     }
   };
 
   const downloadCode = () => {
     files.forEach(file => {
-      // Don't download system files if we hide them
       if (file.path === 'db_config.php') return;
-
       const blob = new Blob([file.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -199,240 +198,100 @@ function App() {
     });
   };
 
-  // Check if we're using environment variable (for UI display)
   const usingEnvKey = !!import.meta.env.VITE_NEBIUS_API_KEY;
 
   return (
     <div className="flex flex-col h-[100dvh] bg-bolt-dark text-bolt-text overflow-hidden font-sans">
-      
-      {/* API Key Modal - Only show if no environment variable AND no localStorage key */}
-      {showApiKeyModal && !usingEnvKey && (
+       {/* API Key Modal */}
+       {showApiKeyModal && !usingEnvKey && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-bolt-gray border border-bolt-border rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
-                🔑
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">API Key Required</h2>
-              <p className="text-bolt-text text-sm">
-                VibePHP uses Nebius AI to generate code. Enter your API key to get started.
-              </p>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-bolt-text mb-2">
-                  Nebius API Key
-                </label>
-                <input
-                  type="password"
-                  value={tempApiKey}
-                  onChange={(e) => setTempApiKey(e.target.value)}
-                  placeholder="Enter your API key..."
-                  className="w-full bg-bolt-dark border border-bolt-border rounded-lg px-4 py-3 text-bolt-text focus:outline-none focus:border-bolt-accent focus:ring-2 focus:ring-bolt-accent/50 transition-all"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && tempApiKey.trim()) {
-                      handleSaveApiKey();
-                    }
-                  }}
-                  autoFocus
-                />
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveApiKey}
-                  disabled={!tempApiKey.trim()}
-                  className="flex-1 bg-bolt-accent hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-blue-500/20"
-                >
-                  Save & Continue
-                </button>
-                <a
-                  href="https://studio.nebius.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 bg-bolt-hover hover:bg-bolt-border text-white font-semibold py-3 px-4 rounded-lg transition-all text-center border border-bolt-border"
-                >
-                  Get API Key
-                </a>
-              </div>
-              
-              <div className="bg-bolt-dark/50 border border-bolt-border/50 rounded-lg p-3">
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  🔒 Your API key is stored locally in your browser and never sent anywhere except directly to Nebius API.
-                </p>
-              </div>
-            </div>
+             <h2 className="text-xl font-bold text-white mb-4 text-center">API Key Required</h2>
+             <input type="password" value={tempApiKey} onChange={e => setTempApiKey(e.target.value)} 
+                    className="w-full bg-bolt-dark border border-bolt-border rounded p-3 text-white mb-4" placeholder="Nebius API Key" />
+             <button onClick={handleSaveApiKey} className="w-full bg-blue-600 text-white p-3 rounded font-bold">Save</button>
           </div>
         </div>
-      )}
+       )}
+
+       {/* Loading Bar */}
+       {isGenerating && (
+         <div className="fixed top-0 left-0 right-0 h-1 bg-blue-600/20 z-50">
+           <div className="h-full bg-blue-500 animate-progress"></div>
+         </div>
+       )}
 
       {/* Header */}
       <header className="h-14 border-b border-bolt-border flex items-center justify-between px-4 lg:px-6 bg-bolt-gray shrink-0 z-30">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold font-mono text-lg shadow-lg">V</div>
-          <h1 className="font-bold text-lg tracking-tight text-white hidden sm:block">VibePHP</h1>
+           <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold font-mono text-lg shadow-lg">V</div>
+           <h1 className="font-bold text-lg tracking-tight text-white hidden sm:block">VibePHP <span className="text-xs font-normal text-green-400 border border-green-400/30 px-1.5 py-0.5 rounded ml-2">Agentic</span></h1>
         </div>
-
+        
         <div className="flex md:hidden bg-bolt-dark p-1 rounded-lg border border-bolt-border">
-          <button 
-            onClick={() => setMobileTab('chat')}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${mobileTab === 'chat' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}
-          >
-            Chat
-          </button>
-          <button 
-            onClick={() => setMobileTab('ide')}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${mobileTab === 'ide' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}
-          >
-            Code
-          </button>
+          <button onClick={() => setMobileTab('chat')} className={`px-3 py-1 text-xs rounded ${mobileTab === 'chat' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}>Chat</button>
+          <button onClick={() => setMobileTab('ide')} className={`px-3 py-1 text-xs rounded ${mobileTab === 'ide' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}>Code</button>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Only show API key button if NOT using environment variable */}
-          {!usingEnvKey && apiKey && (
-            <button
-              onClick={() => {
-                setTempApiKey(apiKey);
-                setShowApiKeyModal(true);
-              }}
-              className="px-3 py-1.5 text-xs font-medium bg-bolt-hover hover:bg-bolt-border border border-bolt-border rounded-full transition-all text-gray-400 hover:text-white flex items-center gap-1.5"
-              title="Change API Key"
-            >
-              🔑
-              <span className="hidden sm:inline">API Key</span>
-            </button>
-          )}
-          {/* Show indicator if using environment variable */}
-          {usingEnvKey && (
-            <div className="px-3 py-1.5 text-xs font-medium bg-green-900/30 border border-green-700/50 rounded-full text-green-400 flex items-center gap-1.5">
-              ✓
-              <span className="hidden sm:inline">API Key Configured</span>
-            </div>
-          )}
-          <button 
-            onClick={downloadCode}
-            className="px-3 py-1.5 text-xs font-medium bg-bolt-hover hover:bg-bolt-border border border-bolt-border rounded-full transition-all flex items-center gap-2 text-white hover:text-blue-400"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            <span className="hidden sm:inline">Download</span>
-          </button>
+            {!usingEnvKey && apiKey && (
+                <button onClick={() => setShowApiKeyModal(true)} className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors">Key</button>
+            )}
+             <button onClick={downloadCode} className="px-3 py-1.5 text-xs bg-bolt-hover rounded-full text-white hover:bg-bolt-border transition-colors">Download</button>
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden relative">
-        
-        {/* Left: Chat & Settings */}
-        <div className={`
-          flex-col border-r border-bolt-border bg-bolt-dark shrink-0 z-20 transition-all duration-300
-          absolute inset-0 md:static md:flex
-          ${mobileTab === 'chat' ? 'flex' : 'hidden'}
-          w-full md:w-[350px] lg:w-[400px]
-        `}>
-           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col gap-4">
-              {messages.map(msg => (
-                <ChatMessage key={msg.id} message={msg} />
-              ))}
-              <div ref={messagesEndRef} />
-           </div>
-
-           <div className="p-4 border-t border-bolt-border bg-bolt-gray/50 backdrop-blur-sm">
-              <form onSubmit={handleSendMessage} className="relative group">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Describe your PHP app..."
-                  className="w-full bg-bolt-dark border border-bolt-border rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:border-bolt-accent focus:ring-1 focus:ring-bolt-accent resize-none h-24 custom-scrollbar transition-all placeholder-gray-600"
-                />
-                <button 
-                  type="submit"
-                  disabled={!prompt.trim() || isGenerating}
-                  className="absolute right-3 bottom-3 p-2 bg-bolt-accent text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-blue-500/20"
-                >
-                  {isGenerating ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                  )}
-                </button>
-              </form>
-           </div>
-        </div>
-
-        {/* Right: Code & Preview */}
-        <div className={`
-          flex-col min-w-0 bg-[#0f1014] flex-1
-          absolute inset-0 md:static md:flex
-          ${mobileTab === 'ide' ? 'flex' : 'hidden'}
-        `}>
-           <div className="h-10 border-b border-bolt-border bg-bolt-gray flex items-center px-2 justify-between shrink-0">
-             <div className="flex items-center">
-                {viewMode === 'code' && (
-                  <button 
-                    onClick={() => setShowFileExplorer(!showFileExplorer)}
-                    className="md:hidden p-2 text-gray-400 hover:text-white"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+         {/* Sidebar */}
+         <div className={`flex-col border-r border-bolt-border bg-bolt-dark w-full md:w-[400px] shrink-0 z-20 ${mobileTab === 'chat' ? 'flex absolute inset-0 md:static' : 'hidden md:flex'}`}>
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 custom-scrollbar">
+                {messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+                <div ref={messagesEndRef} />
+            </div>
+            {/* Input Area */}
+            <div className="p-4 border-t border-bolt-border bg-bolt-gray/50 backdrop-blur">
+               {isGenerating && <div className="text-xs text-blue-400 mb-2 font-mono animate-pulse">{statusMessage}</div>}
+               <form onSubmit={handleSendMessage} className="relative">
+                  <textarea 
+                    value={prompt} 
+                    onChange={e => setPrompt(e.target.value)} 
+                    onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }}}
+                    placeholder="Describe your app..." 
+                    className="w-full bg-bolt-dark border border-bolt-border rounded-xl p-3 text-sm h-24 focus:outline-none focus:border-blue-500 transition-colors custom-scrollbar resize-none"
+                  />
+                  <button type="submit" disabled={isGenerating || !prompt.trim()} className="absolute right-3 bottom-3 p-2 bg-blue-600 text-white rounded-lg disabled:opacity-50 hover:bg-blue-700 transition-colors">
+                    {isGenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : "→"}
                   </button>
-                )}
-             </div>
+               </form>
+            </div>
+         </div>
 
-             <div className="flex p-1 bg-bolt-dark rounded-lg border border-bolt-border">
-                <button 
-                  onClick={() => setViewMode('code')}
-                  className={`px-4 py-1 text-xs font-medium rounded-md transition-all ${viewMode === 'code' ? 'bg-bolt-hover text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Code
-                </button>
-                <button 
-                  onClick={() => setViewMode('preview')}
-                  className={`px-4 py-1 text-xs font-medium rounded-md transition-all ${viewMode === 'preview' ? 'bg-bolt-hover text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                  Preview
-                </button>
-              </div>
-
-              <div className="w-8"></div>
-           </div>
-
-           <div className="flex-1 overflow-hidden relative flex flex-row">
-              {viewMode === 'code' ? (
-                <>
-                  <div className={`
-                    absolute md:static z-10 h-full bg-bolt-gray border-r border-bolt-border transition-all duration-200
-                    ${showFileExplorer ? 'w-64 translate-x-0' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 overflow-hidden border-none'}
-                  `}>
-                     <div className="w-64 h-full">
-                      <FileExplorer files={files} activeFile={activeFile} onSelectFile={(f) => { setActiveFile(f); if(window.innerWidth < 768) setShowFileExplorer(false); }} />
-                     </div>
-                  </div>
-                  
-                  {showFileExplorer && (
-                    <div 
-                      className="absolute inset-0 bg-black/50 z-0 md:hidden"
-                      onClick={() => setShowFileExplorer(false)}
-                    ></div>
-                  )}
-
-                  <div className="flex-1 h-full overflow-hidden relative">
-                     <CodeEditor file={activeFile} />
-                  </div>
-                </>
-              ) : (
-                <div className="w-full h-full bg-white text-black">
-                   <PreviewFrame files={files} />
+         {/* Editor/Preview */}
+         <div className={`flex-col flex-1 bg-[#0f1014] ${mobileTab === 'ide' ? 'flex absolute inset-0 md:static' : 'hidden md:flex'}`}>
+            <div className="h-10 border-b border-bolt-border bg-bolt-gray flex items-center px-2 justify-between shrink-0">
+                <div className="md:hidden">
+                    {/* Spacer for mobile menu alignment */}
                 </div>
-              )}
-           </div>
-        </div>
+                <div className="flex p-1 bg-bolt-dark rounded-lg border border-bolt-border">
+                    <button onClick={() => setViewMode('code')} className={`px-4 py-1 text-xs rounded-md transition-colors ${viewMode === 'code' ? 'bg-bolt-hover text-white' : 'text-gray-500'}`}>Code</button>
+                    <button onClick={() => setViewMode('preview')} className={`px-4 py-1 text-xs rounded-md transition-colors ${viewMode === 'preview' ? 'bg-bolt-hover text-white' : 'text-gray-500'}`}>Preview</button>
+                </div>
+                <div className="w-8"></div>
+            </div>
+            <div className="flex-1 flex overflow-hidden relative">
+                {viewMode === 'code' ? (
+                   <>
+                     <div className={`w-64 border-r border-bolt-border bg-bolt-gray absolute md:static h-full z-10 transition-transform ${showFileExplorer ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                        <FileExplorer files={files} activeFile={activeFile} onSelectFile={(f) => { setActiveFile(f); if(window.innerWidth < 768) setShowFileExplorer(false); }} />
+                     </div>
+                     <div className="flex-1 h-full"><CodeEditor file={activeFile} /></div>
+                   </>
+                ) : (
+                   <div className="flex-1 bg-white h-full"><PreviewFrame files={files} /></div>
+                )}
+            </div>
+         </div>
       </div>
     </div>
   );
