@@ -75,7 +75,7 @@ Start your response with { immediately.
       model: MODEL_NAME,
       messages: messages,
       temperature: 0.3, // Lower for more consistent code
-      max_tokens: 8000  // INCREASED - was 4096, now 8000
+      max_tokens: 16384  // INCREASED - was 4096, now 8000
     });
 
     const content = response.choices[0]?.message?.content;
