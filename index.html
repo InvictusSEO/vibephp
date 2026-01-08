@@ -2,9 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>VibePHP - AI PHP Generator</title>
-    
+
     <!-- Buffer Polyfill - MUST BE FIRST -->
     <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.js"></script>
     <script>
@@ -14,57 +14,183 @@
         console.log('[VibePHP] Buffer polyfill loaded');
       }
     </script>
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
+              sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
               mono: ['Fira Code', 'monospace'],
             },
             colors: {
+              primary: {
+                50: '#eff6ff',
+                100: '#dbeafe',
+                200: '#bfdbfe',
+                300: '#93c5fd',
+                400: '#60a5fa',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+                800: '#1e40af',
+                900: '#1e3a8a',
+              },
+              gray: {
+                50: '#f9fafb',
+                100: '#f3f4f6',
+                200: '#e5e7eb',
+                300: '#d1d5db',
+                400: '#9ca3af',
+                500: '#6b7280',
+                600: '#4b5563',
+                700: '#374151',
+                800: '#1f2937',
+                900: '#111827',
+                950: '#0a0a0a',
+              },
               bolt: {
-                dark: '#0b0c0e',
-                gray: '#15171b',
-                hover: '#1f2228',
-                border: '#2a2e37',
-                text: '#e1e4e8',
-                accent: '#646cff',
+                dark: '#0f172a',
+                gray: '#1e293b',
+                hover: '#334155',
+                border: '#475569',
+                text: '#f1f5f9',
+                accent: '#3b82f6',
               }
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.2s ease-in-out',
+              'slide-up': 'slideUp 0.3s ease-out',
+              'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(10px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              },
+            },
+            backdropBlur: {
+              xs: '2px',
             }
           },
         },
       }
     </script>
-    
+
     <style>
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
       body {
-        background-color: #0b0c0e;
-        color: #e1e4e8;
+        background-color: #0f172a;
+        color: #f1f5f9;
         margin: 0;
         overflow: hidden;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
-      
+
       /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
       }
-      ::-webkit-scrollbar-track {
-        background: #0b0c0e; 
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent; 
       }
-      ::-webkit-scrollbar-thumb {
-        background: #2a2e37; 
-        border-radius: 4px;
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.5); 
+        border-radius: 3px;
       }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #3e4451; 
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(100, 116, 139, 0.7); 
       }
-      
+
+      /* Hide scrollbar for Chrome, Safari and Opera */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      /* Hide scrollbar for IE, Edge and Firefox */
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+
+      /* Mobile optimizations */
+      @media (max-width: 768px) {
+        .mobile-fullscreen {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          z-index: 50 !important;
+        }
+        
+        .mobile-bottom-sheet {
+          position: fixed !important;
+          bottom: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          border-radius: 20px 20px 0 0 !important;
+          box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.3) !important;
+          animation: slideUp 0.3s ease-out !important;
+        }
+      }
+
+      /* Touch-friendly buttons */
+      .touch-target {
+        min-height: 44px;
+        min-width: 44px;
+      }
+
+      /* Loading skeleton */
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.06) 25%,
+          rgba(255, 255, 255, 0.1) 50%,
+          rgba(255, 255, 255, 0.06) 75%
+        );
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+      }
+
+      @keyframes loading {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      /* Safe area insets for notches */
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 20px);
+      }
+
+      /* Glass effect */
+      .glass {
+        background: rgba(30, 41, 59, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
       #error-overlay {
         display: none;
         position: fixed;
@@ -80,7 +206,7 @@
         font-family: 'Fira Code', monospace;
       }
     </style>
-    
+
     <script>
       // Global error handlers
       function showError(title, message, details) {
@@ -97,7 +223,7 @@
           `;
         }
       }
-      
+
       window.addEventListener('error', function(e) {
         if (e.target && e.target.id === 'error-overlay') return;
         console.error('[VibePHP] Error:', e);
@@ -108,16 +234,19 @@
         console.error('[VibePHP] Unhandled Promise:', e);
         showError('Unhandled Promise Rejection', e.reason?.message || String(e.reason), e.reason?.stack);
       });
-      
+
       // Additional global shims for Node.js compatibility
       window.process = window.process || {};
       window.process.env = window.process.env || {};
       window.process.env.NODE_ENV = 'production';
       window.global = window;
+
+      // Detect mobile
+      window.isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
-      console.log('[VibePHP] Environment initialized');
+      console.log('[VibePHP] Environment initialized, Mobile:', window.isMobile);
     </script>
-    
+
     <script type="importmap">
     {
       "imports": {
@@ -130,24 +259,26 @@
     }
     </script>
   </head>
-  <body>
+  <body class="overflow-hidden">
     <div id="error-overlay">
       <h1 class="text-2xl font-bold mb-4 text-white">Application Error</h1>
       <div id="error-content"></div>
     </div>
-    
+
     <div id="root">
-      <div style="display:flex; justify-content:center; align-items:center; height:100vh; color:#e1e4e8; font-family: sans-serif; flex-direction: column; gap: 1rem;">
-        <div style="width: 24px; height: 24px; border: 2px solid #e1e4e8; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <div style="font-family: 'Fira Code', monospace; font-size: 0.875rem; color: #888;">Initializing VibePHP...</div>
+      <div class="flex flex-col items-center justify-center min-h-screen p-4">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-6 shadow-lg">
+          <span class="text-white font-bold text-xl">V</span>
+        </div>
+        <div class="text-center">
+          <div class="text-sm text-gray-400 mb-2 font-mono">Loading VibePHP</div>
+          <div class="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse w-1/2"></div>
+          </div>
+        </div>
       </div>
-      <style>
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      </style>
     </div>
-    
+
     <script type="module" src="./index.tsx"></script>
   </body>
 </html>
