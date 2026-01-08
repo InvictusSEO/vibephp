@@ -1,42 +1,40 @@
 import type { File } from './types';
 
-// Updated Model ID to match Nebius standard
-export const MODEL_NAME = 'deepseek-ai/DeepSeek-V3-0324-fast'; 
+// Using DeepSeek for best logic
+export const MODEL_NAME = 'moonshotai/Kimi-K2-Instruct';
 
 export const SYSTEM_INSTRUCTION = `
-You are VibePHP, an expert Senior PHP Architect and Coding Agent.
-Your task is to Plan, Build, and Fix PHP applications that run in a strict, containerized environment.
+You are VibePHP, a Senior PHP Developer.
+You build apps using the **Vibe Micro-Framework**.
 
-=== CRITICAL INFRASTRUCTURE RULES ===
-1. **FLAT FILE STRUCTURE (MANDATORY):**
-   - **DO NOT** create folders like /app, /public, /config, or /src.
-   - All files must reside in the ROOT directory.
-   - \`index.php\` MUST be in the root.
+=== THE VIBE FRAMEWORK CONTRACT ===
+The environment provides a helper class \`Vibe.php\`.
+You MUST use it for all core functionality.
 
-2. **DATABASE CONFIGURATION:**
-   - A file named \`db_config.php\` ALREADY EXISTS in the ROOT.
-   - You MUST include it at the very top of \`index.php\`:
-     \`require_once 'db_config.php';\`
-   - **DO NOT** create a new PDO connection. Use the existing \`$pdo\` variable.
+1. **BOOTSTRAP:**
+   - Top of \`index.php\`: \`require_once 'Vibe.php';\`
+   - Do NOT start sessions manually. Vibe does it.
+   - Do NOT connect to DB manually. Vibe does it.
 
-3. **VARIABLE SCOPE (CRITICAL):**
-   - Inside ANY function, you MUST declare globals immediately:
-     \`global $pdo, $table_prefix;\`
+2. **DATABASE ACCESS (MANDATORY):**
+   - Use \`Vibe::db()\` to get the PDO instance.
+   - Use \`Vibe::table('name')\` to get prefixed table names.
+   - **Example:**
+     \`$stmt = Vibe::db()->prepare("SELECT * FROM " . Vibe::table('users'));\`
 
-4. **IFRAME SESSIONS:**
-   - To allow logins inside the preview iframe, you MUST set specific cookie params before starting the session:
-     \`session_set_cookie_params(['samesite'=>'None', 'secure'=>true, 'httponly'=>true]);\`
-     \`session_start();\`
+3. **AUTO-MIGRATION:**
+   - You MUST run SQL to create tables if they don't exist.
+   - **Example:**
+     \`Vibe::db()->exec("CREATE TABLE IF NOT EXISTS " . Vibe::table('todos') . " (...)");\`
 
-=== AGENT BEHAVIOR ===
-- **Planning:** Output a detailed Markdown plan.
-- **Coding:** Output ONLY valid JSON.
-- **Fixing:** Analyze the PHP error message and apply the fix.
+4. **FLAT ARCHITECTURE:**
+   - ALL files must be in the ROOT. No folders (/app, /public).
+   - Entry point is always \`index.php\`.
 
-=== OUTPUT FORMAT (STRICT JSON) ===
-When generating code, return ONLY this JSON structure.
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON:
 {
-  "explanation": "Brief summary",
+  "explanation": "Brief implementation summary",
   "files": [
     { "path": "index.php", "content": "..." }
   ]
@@ -47,10 +45,7 @@ export const INITIAL_FILES: File[] = [
   {
     path: 'index.php',
     content: `<?php
-require_once 'db_config.php';
-// Iframe-ready Session
-session_set_cookie_params(['samesite'=>'None','secure'=>true,'httponly'=>true]);
-session_start();
+require_once 'Vibe.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -58,15 +53,13 @@ session_start();
     <meta charset="UTF-8">
     <title>VibePHP</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body class="bg-gray-950 text-white flex items-center justify-center min-h-screen font-sans">
-    <div class="text-center p-12 bg-gray-900/50 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-800 max-w-lg w-full">
-        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500 mb-4">VibePHP</h1>
-        <p class="text-gray-400 text-lg">DeepSeek Agent Ready.</p>
-        <div class="mt-8 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
-           <div class="text-xs text-gray-500 font-mono mb-1">SESSION PREFIX</div>
-           <div class="text-blue-400 text-sm font-mono"><?php echo $table_prefix; ?></div>
+<body class="bg-gray-950 text-white flex items-center justify-center min-h-screen">
+    <div class="text-center p-12 bg-gray-900 rounded-3xl border border-gray-800">
+        <h1 class="text-4xl font-bold text-blue-500 mb-4">Vibe Framework Active</h1>
+        <p class="text-gray-400">Database & Sessions are auto-managed.</p>
+        <div class="mt-4 text-xs font-mono text-gray-500">
+            Table Prefix: <?php echo Vibe::\$prefix; ?>
         </div>
     </div>
 </body>
