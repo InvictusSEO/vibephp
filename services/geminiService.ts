@@ -2,13 +2,6 @@ import OpenAI from 'openai';
 import type { GeneratedFilesResponse, Message, File } from '../types';
 import { MODEL_NAME, SYSTEM_INSTRUCTION } from '../constants';
 
-/**
- * Generate PHP application code using Nebius API
- * @param prompt - User's request
- * @param currentFiles - Current file state
- * @param history - Conversation history
- * @param userApiKey - API key from user (stored in localStorage) - OPTIONAL if env var exists
- */
 export const generateAppCode = async (
   prompt: string, 
   currentFiles: File[],
@@ -16,8 +9,6 @@ export const generateAppCode = async (
   userApiKey?: string
 ): Promise<GeneratedFilesResponse> => {
   
-  // PRIORITY 1: Use environment variable (from GitHub Secret)
-  // PRIORITY 2: Use user-provided key (from localStorage)
   const apiKey = import.meta.env.VITE_NEBIUS_API_KEY || userApiKey;
   
   if (!apiKey) {
@@ -29,15 +20,14 @@ export const generateAppCode = async (
   }
 
   console.log('[VibePHP] Using API key from:', import.meta.env.VITE_NEBIUS_API_KEY ? 'environment' : 'user input');
+  console.log('[VibePHP] Model:', MODEL_NAME);
 
-  // Initialize OpenAI client with Nebius endpoint
   const client = new OpenAI({
     baseURL: 'https://api.tokenfactory.nebius.com/v1/',
     apiKey: apiKey,
     dangerouslyAllowBrowser: true
   });
   
-  // Build file context for the AI
   const fileContext = currentFiles
     .map(f => `File: ${f.path}\nContent:\n${f.content}\n---`)
     .join('\n');
@@ -53,21 +43,28 @@ Return the COMPLETE content for any file you modify.
 If a file is unchanged, do not include it.
 If it is a new app, generate all necessary files.
 
-IMPORTANT: You must output strictly valid JSON. 
-The response should contain ONLY the JSON object, no markdown formatting, no code blocks.
+CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
+1. You MUST respond with ONLY a JSON object
+2. DO NOT include any markdown formatting (no \`\`\`json)
+3. DO NOT include any explanation before or after the JSON
+4. DO NOT include any text outside the JSON object
+5. Start your response immediately with { and end with }
 
-JSON Schema:
+Required JSON format (nothing else):
 {
-  "explanation": "string describing what you built",
+  "explanation": "Brief description of what you built",
   "files": [
-    { "path": "string", "content": "string" }
+    { "path": "filename.php", "content": "complete file content here" }
   ]
 }
+
+Remember: ONLY JSON, no other text!
 `;
 
-  // Filter conversation history
+  // Only keep last 3 conversation turns to avoid token limits
   const validHistory = history
     .filter(m => !m.isLoading && m.role !== 'system')
+    .slice(-6) // Last 3 exchanges (user + assistant)
     .map(m => ({
       role: m.role as 'user' | 'assistant',
       content: m.content
@@ -81,7 +78,6 @@ JSON Schema:
 
   try {
     console.log('[VibePHP] Sending request to Nebius API...');
-    console.log('[VibePHP] Model:', MODEL_NAME);
     
     const response = await client.chat.completions.create({
       model: MODEL_NAME,
@@ -97,16 +93,30 @@ JSON Schema:
       throw new Error("No content received from Nebius API");
     }
     
-    // Clean up the response
+    // Aggressive JSON extraction
     let cleanJson = content.trim();
     
     // Remove markdown code blocks
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson
-        .replace(/^```(?:json)?\s*/, '')
-        .replace(/\s*```$/, '')
-        .trim();
+    cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/g, '');
+    
+    // Remove any text before first {
+    const firstBrace = cleanJson.indexOf('{');
+    if (firstBrace > 0) {
+      cleanJson = cleanJson.substring(firstBrace);
     }
+    
+    // Remove any text after last }
+    const lastBrace = cleanJson.lastIndexOf('}');
+    if (lastBrace !== -1 && lastBrace < cleanJson.length - 1) {
+      cleanJson = cleanJson.substring(0, lastBrace + 1);
+    }
+    
+    // Try to fix common JSON issues
+    cleanJson = cleanJson
+      .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+      .trim();
+    
+    console.log('[VibePHP] Cleaned JSON (first 200 chars):', cleanJson.substring(0, 200));
     
     // Parse JSON
     try {
@@ -116,32 +126,61 @@ JSON Schema:
         throw new Error("Invalid response: missing 'files' array");
       }
       
+      if (data.files.length === 0) {
+        throw new Error("Invalid response: 'files' array is empty");
+      }
+      
       console.log('[VibePHP] Successfully parsed, files:', data.files.length);
       return data;
       
     } catch (parseError) {
       console.error("[VibePHP] JSON Parse Error:", parseError);
-      console.error("[VibePHP] Raw content:", content);
+      console.error("[VibePHP] Raw content (first 500 chars):", content.substring(0, 500));
+      console.error("[VibePHP] Cleaned JSON (first 500 chars):", cleanJson.substring(0, 500));
+      
+      // Try to find JSON in the response
+      const jsonMatch = content.match(/\{[\s\S]*"files"[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const extracted = JSON.parse(jsonMatch[0]) as GeneratedFilesResponse;
+          if (extracted.files && Array.isArray(extracted.files)) {
+            console.log('[VibePHP] Recovered JSON from regex match');
+            return extracted;
+          }
+        } catch (e) {
+          console.error('[VibePHP] Failed to parse regex match');
+        }
+      }
       
       throw new Error(
         "Failed to parse AI response.\n\n" +
-        "The model returned invalid JSON. Try:\n" +
-        "1. Making your request more specific\n" +
-        "2. Breaking it into smaller steps\n" +
-        "3. Checking if the request is too complex"
+        "The model returned invalid JSON.\n\n" +
+        "Raw response preview:\n" +
+        content.substring(0, 200) + "...\n\n" +
+        "Try:\n" +
+        "1. Simplifying your request\n" +
+        "2. Starting a new conversation (refresh page)\n" +
+        "3. Using shorter, clearer instructions"
       );
     }
 
   } catch (error: any) {
     console.error("[VibePHP] API Error:", error);
     
-    // Handle specific error codes
     if (error.status === 401 || error.message?.includes('401')) {
       throw new Error(
         "Invalid API Key\n\n" +
         "Your Nebius API key is incorrect or expired.\n\n" +
-        "Please update your API key in GitHub Secrets or settings.\n" +
+        "Please update your API key in GitHub Secrets.\n" +
         "Get a new key at: https://studio.nebius.ai"
+      );
+    }
+    
+    if (error.status === 404) {
+      throw new Error(
+        "Model Not Found (404)\n\n" +
+        `The model "${MODEL_NAME}" doesn't exist or isn't available.\n\n` +
+        "Please check your constants.ts file and verify the model name."
       );
     }
     
@@ -161,7 +200,6 @@ JSON Schema:
       );
     }
     
-    // Generic error
     throw new Error(
       `API Error: ${error.message}\n\n` +
       `Status: ${error.status || 'Unknown'}\n\n` +
