@@ -8,7 +8,7 @@ import PreviewFrame from './components/PreviewFrame';
 import ChatMessage from './components/ChatMessage';
 import { AgentUI } from './components/AgentUI';
 
-// Backend URL for Health Checks
+// Backend URL
 const EXECUTOR_URL = 'https://streamingsites.eu.org/phpvibe-executor/index.php';
 
 function App() {
@@ -33,7 +33,7 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('code');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // NEW: Agent State
+  // Agent State
   const [agentStatus, setAgentStatus] = useState<AgentStatus>({
     state: 'IDLE',
     message: '',
