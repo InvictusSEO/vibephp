@@ -18,7 +18,7 @@ function App() {
     { 
       id: '1', 
       role: 'assistant', 
-      content: "Hi! I'm VibePHP (DeepSeek Edition). Describe the app you want, and I'll Architect, Build, and Verify it for you.", 
+      content: "Hi! I'm VibePHP. Describe your idea, and I'll create a plan before building it.", 
       timestamp: Date.now() 
     }
   ]);
@@ -78,13 +78,21 @@ function App() {
     setAgentStatus({ state: 'PLANNING', message: 'Architecting solution...', streamContent: '' });
     
     try {
+      // Call the service to stream the plan
       await streamPlan(userMsg.content, messages, apiKey, (text) => {
         setAgentStatus(prev => ({ ...prev, streamContent: text }));
       });
+      // When done, wait for user confirmation
       setAgentStatus(prev => ({ ...prev, state: 'PLAN_READY' }));
-    } catch (err) {
-      console.error(err);
-      setAgentStatus({ state: 'IDLE', message: '', streamContent: '', error: 'Planning failed' });
+    } catch (err: any) {
+      console.error("Planning Error:", err);
+      // SHOW ERROR IN UI INSTEAD OF CLOSING
+      setAgentStatus({ 
+        state: 'ERROR_DETECTED', 
+        message: 'Planning Failed', 
+        streamContent: '', 
+        error: err.message || "Failed to connect to AI. Check your API Key."
+      });
     }
   };
 
@@ -161,9 +169,13 @@ function App() {
         setAgentStatus(prev => ({ ...prev, streamContent: text }));
       });
       setAgentStatus(prev => ({ ...prev, state: 'FIX_READY' }));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setAgentStatus(prev => ({ ...prev, state: 'IDLE' }));
+      setAgentStatus(prev => ({ 
+        ...prev, 
+        state: 'ERROR_DETECTED', 
+        error: err.message 
+      }));
     }
   };
 
