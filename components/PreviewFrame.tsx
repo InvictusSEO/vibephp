@@ -9,37 +9,37 @@ interface PreviewFrameProps {
 }
 
 // Helper: Get or create a persistent Session ID
-// This runs once per browser session, so refreshing the page keeps the same DB.
 const getSessionId = () => {
   const STORAGE_KEY = 'vibephp_session_id';
   let id = sessionStorage.getItem(STORAGE_KEY);
   
   if (!id) {
-    // Generate a unique ID: sess_timestamp_random
-    id = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
+    // More secure generation: timestamp + crypto random
+    const timestamp = Date.now().toString(36);
+    const random = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+      .map(b => b.toString(36))
+      .join('');
+    id = `sess_${timestamp}_${random}`;
     sessionStorage.setItem(STORAGE_KEY, id);
+    console.log('[VibePHP] Created new session:', id);
   }
   
   return id;
 };
 
 const PreviewFrame: React.FC<PreviewFrameProps> = ({ files }) => {
-  const [sessionId] = useState(getSessionId()); // Initialize once
+  const [sessionId] = useState(getSessionId());
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Ref to track if we have already deployed these specific files
   const lastDeployedFiles = useRef<string>('');
 
   useEffect(() => {
-    // Create a fingerprint of the current files
     const filesFingerprint = JSON.stringify(files.map(f => ({ p: f.path, c: f.content })));
     
-    // Only deploy if files actually changed
     if (filesFingerprint === lastDeployedFiles.current) return;
     
-    // Debounce deployment (wait 1s after typing stops)
     const timer = setTimeout(() => {
       lastDeployedFiles.current = filesFingerprint;
       deployCode();
@@ -57,7 +57,6 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({ files }) => {
     try {
       console.log(`[VibePHP] Deploying to session: ${sessionId}`);
 
-      // 1. Send files to PHP server
       const response = await fetch(EXECUTOR_URL, {
         method: 'POST',
         headers: {
@@ -79,8 +78,6 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({ files }) => {
       
       if (!result.success) throw new Error(result.error || 'Deployment failed');
 
-      // 2. Set the URL
-      // We add ?t=timestamp to force the iframe to reload even if URL is same
       setIframeUrl(`${result.url}?t=${Date.now()}`);
 
     } catch (err: any) {
@@ -129,7 +126,7 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({ files }) => {
           <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm flex items-center justify-center">
             <div className="flex flex-col items-center">
               <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-gray-600 font-medium animate-pulse">Syncing with Server...</p>
+              <p className="text-gray-600 font-medium animate-pulse">Deploying to server...</p>
             </div>
           </div>
         )}
@@ -155,7 +152,6 @@ const PreviewFrame: React.FC<PreviewFrameProps> = ({ files }) => {
             src={iframeUrl}
             className="w-full h-full border-none"
             title="App Preview"
-            // Important permissions for PHP forms/scripts
             sandbox="allow-forms allow-scripts allow-same-origin allow-modals allow-popups"
           />
         ) : (
