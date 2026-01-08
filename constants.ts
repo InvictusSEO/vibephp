@@ -1,38 +1,39 @@
 import type { File } from './types';
 
-// Qwen2.5-Coder is specifically designed for code generation
-// Fast, accurate, no "thinking" tokens wasted
-export const MODEL_NAME = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
+export const MODEL_NAME = 'Qwen/Qwen3-235B-A22B-Instruct-2507'; // Or your preferred model
 
 export const SYSTEM_INSTRUCTION = `
-You are VibePHP, an expert Full Stack PHP Developer AI specialized in generating clean, working PHP code.
+You are VibePHP, an expert PHP Developer specialized in building secure, modern web applications.
 
-CRITICAL: You MUST respond with ONLY a JSON object. No explanations, no markdown, no extra text.
+CRITICAL INSTRUCTIONS:
+1. RESPONSE FORMAT: You must ONLY return a JSON object. No markdown, no conversation.
+2. DATABASE: 
+   - You are running in a MySQL environment.
+   - A file named 'db_config.php' ALREADY EXISTS.
+   - You MUST include it: "require_once 'db_config.php';"
+   - Use the variable $pdo for database connections.
+   - Use the variable $table_prefix for ALL table names. 
+     Example: "CREATE TABLE {$table_prefix}users ..."
+     Example: "SELECT * FROM {$table_prefix}posts ..."
+3. STRUCTURE:
+   - Always create 'index.php' as the entry point.
+   - Use standard <link rel="stylesheet"> for CSS.
+   - Use standard <script src="..."></script> for JS.
 
-Response format (exactly this structure):
+Response format:
 {
-  "explanation": "one sentence description",
+  "explanation": "Brief summary",
   "files": [
-    { "path": "index.php", "content": "<?php ... complete code ..." },
-    { "path": "style.css", "content": "/* css code */" }
+    { "path": "index.php", "content": "..." },
+    { "path": "style.css", "content": "..." }
   ]
 }
-
-CODING RULES:
-1. Use PHP 8.2+, HTML5, modern CSS (Tailwind if appropriate)
-2. SQLite ONLY for databases: new PDO('sqlite:database.sqlite')
-3. Always CREATE TABLE IF NOT EXISTS at start
-4. Include complete, working code in each file
-5. Make UI modern and visually appealing
-6. Handle errors gracefully
-
-OUTPUT: Pure JSON only. Start with { and end with }. No other text.
 `;
 
 export const INITIAL_FILES: File[] = [
   {
     path: 'index.php',
-    content: '<?php\n// Welcome to VibePHP\n// Start by describing your app in the chat.\n\n$title = "VibePHP";\necho "<h1>Hello World</h1>";\necho "<p>Ready to build with PHP & SQLite.</p>";\n?>',
+    content: '<?php\nrequire_once "db_config.php";\n?>\n<!DOCTYPE html>\n<html lang="en">\n<head>\n    <meta charset="UTF-8">\n    <title>VibePHP</title>\n    <script src="https://cdn.tailwindcss.com"></script>\n</head>\n<body class="bg-gray-100 flex items-center justify-center min-h-screen">\n    <div class="text-center">\n        <h1 class="text-4xl font-bold text-blue-600 mb-4">VibePHP Ready</h1>\n        <p class="text-gray-600">Describe your app to start coding.</p>\n    </div>\n</body>\n</html>',
     language: 'php'
   }
 ];
