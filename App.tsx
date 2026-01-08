@@ -26,7 +26,7 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
-  
+
   // UI State
   const [mobileTab, setMobileTab] = useState<'chat' | 'ide'>('chat');
   const [showFileExplorer, setShowFileExplorer] = useState(true);
@@ -76,7 +76,7 @@ function App() {
 
     // START PLANNING PHASE
     setAgentStatus({ state: 'PLANNING', message: 'Architecting solution...', streamContent: '' });
-    
+
     try {
       // Call the service to stream the plan
       await streamPlan(userMsg.content, messages, apiKey, (text) => {
@@ -103,15 +103,16 @@ function App() {
     try {
       // Generate Code
       const data = await generateCode(agentStatus.streamContent, files, apiKey);
-      
-      // Update Files
+
+      // Update Files - CRITICAL FIX: DO NOT filter out Vibe.php
       let newFiles = [...files];
       data.files.forEach((f: any) => {
-        if (f.path === 'db_config.php') return;
         const idx = newFiles.findIndex(existing => existing.path === f.path);
         if (idx >= 0) newFiles[idx] = { ...f, language: 'php' };
         else newFiles.push({ ...f, language: 'php' });
       });
+      
+      // Remove db_config.php if present (legacy)
       newFiles = newFiles.filter(f => f.path !== 'db_config.php');
       setFiles(newFiles);
 
@@ -149,11 +150,26 @@ function App() {
         id: Date.now().toString(), role: 'assistant', content: '✅ App built and verified successfully.', timestamp: Date.now() 
       }]);
     } else {
-      // FAILURE
+      // FAILURE with enhanced error context
+      const enhancedError = `
+DEPLOYMENT ERROR:
+${result.error}
+
+FILES DEPLOYED:
+${filesToVerify.map(f => `- ${f.path} (${f.content.length} chars)`).join('\n')}
+
+SESSION: ${sessionId}
+
+TROUBLESHOOTING:
+1. Check if all tables are created with CREATE TABLE IF NOT EXISTS
+2. Ensure you're using Vibe::table() for table names
+3. Verify Vibe.php is included at top of index.php
+      `.trim();
+      
       setAgentStatus(prev => ({ 
         ...prev, 
         state: 'ERROR_DETECTED', 
-        error: result.error,
+        error: enhancedError,
         message: 'Diagnostics failed'
       }));
     }
@@ -203,7 +219,7 @@ function App() {
 
   return (
     <div className="flex flex-col h-[100dvh] bg-bolt-dark text-bolt-text overflow-hidden font-sans relative">
-      
+
       {/* API Key Modal */}
       {showApiKeyModal && !usingEnvKey && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -233,7 +249,7 @@ function App() {
            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold font-mono text-lg shadow-lg">V</div>
            <h1 className="font-bold text-lg tracking-tight text-white hidden sm:block">VibePHP <span className="text-xs font-normal text-green-400 border border-green-400/30 px-1.5 py-0.5 rounded ml-2">DeepSeek</span></h1>
         </div>
-        
+
         <div className="flex md:hidden bg-bolt-dark p-1 rounded-lg border border-bolt-border">
           <button onClick={() => setMobileTab('chat')} className={`px-3 py-1 text-xs rounded ${mobileTab === 'chat' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}>Chat</button>
           <button onClick={() => setMobileTab('ide')} className={`px-3 py-1 text-xs rounded ${mobileTab === 'ide' ? 'bg-bolt-hover text-white' : 'text-gray-400'}`}>Code</button>
