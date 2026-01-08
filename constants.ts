@@ -2,7 +2,7 @@ import type { File } from './types';
 
 // Qwen2.5-Coder is specifically designed for code generation
 // Fast, accurate, no "thinking" tokens wasted
-export const MODEL_NAME = 'Qwen/Qwen2.5-Coder-32B-Instruct';
+export const MODEL_NAME = 'Qwen/Qwen3-235B-A22B-Instruct-2507';
 
 export const SYSTEM_INSTRUCTION = `
 You are VibePHP, an expert Full Stack PHP Developer AI specialized in generating clean, working PHP code.
