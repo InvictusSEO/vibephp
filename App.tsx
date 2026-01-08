@@ -86,12 +86,12 @@ function App() {
       setAgentStatus(prev => ({ ...prev, state: 'PLAN_READY' }));
     } catch (err: any) {
       console.error("Planning Error:", err);
-      // SHOW ERROR IN UI INSTEAD OF CLOSING
+      // SHOW ERROR IN UI - DO NOT CLOSE
       setAgentStatus({ 
         state: 'ERROR_DETECTED', 
         message: 'Planning Failed', 
         streamContent: '', 
-        error: err.message || "Failed to connect to AI. Check your API Key."
+        error: err.message || "Failed to connect to AI. Check your API Key or Model."
       });
     }
   };
