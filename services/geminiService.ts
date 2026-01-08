@@ -23,23 +23,30 @@ export const generateAppCode = async (
     dangerouslyAllowBrowser: true
   });
   
+  // Add Vibe framework context
+  const vibeContext = `
+VIBE FRAMEWORK CONTEXT:
+- Vibe.php is AUTO-INJECTED (do not create it)
+- Use Vibe:: methods for database operations
+- Tables must be created with CREATE TABLE IF NOT EXISTS
+- Always use Vibe::table() for table names
+- Start files with: require_once 'Vibe.php';
+`;
+  
   const fileContext = currentFiles
+    .filter(f => f.path !== 'Vibe.php' && f.path !== 'db_config.php')
     .map(f => `File: ${f.path}\n${f.content}\n---`)
     .join('\n');
   
   const fullPrompt = `
-Files:
+${vibeContext}
+
+EXISTING FILES:
 ${fileContext}
 
-Request: ${prompt}
+REQUEST: ${prompt}
 
-Return ONLY valid JSON. In the content field, properly escape special characters.
-
-Format:
-{
-  "explanation": "brief description",
-  "files": [{"path": "file.php", "content": "code here"}]
-}
+Return ONLY valid JSON with properly escaped content.
 `;
 
   const validHistory = history
@@ -87,7 +94,7 @@ Format:
     
     cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
     
-    // Try to parse - if it fails, use recovery
+    // Try to parse
     let result: GeneratedFilesResponse;
     
     try {
@@ -95,15 +102,13 @@ Format:
       console.log('[VibePHP] ✅ Direct parse successful');
     } catch (parseError: any) {
       console.log('[VibePHP] Parse failed:', parseError.message);
-      console.log('[VibePHP] Attempting recovery...');
       
-      // RECOVERY: Extract data with regex
+      // Recovery: Extract data with regex
       const explanationMatch = cleanJson.match(/"explanation"\s*:\s*"([^"]+)"/);
       const explanation = explanationMatch ? explanationMatch[1] : "Generated code";
       
       const files: Array<{path: string, content: string}> = [];
       
-      // Find each file entry
       const fileRegex = /\{\s*"path"\s*:\s*"([^"]+)"\s*,\s*"content"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
       let match;
       
@@ -111,7 +116,6 @@ Format:
         const path = match[1];
         let rawContent = match[2];
         
-        // Unescape content
         const content = rawContent
           .replace(/\\n/g, '\n')
           .replace(/\\t/g, '\t')
@@ -123,7 +127,6 @@ Format:
       }
       
       if (files.length === 0) {
-        // If regex didn't work, throw original error
         throw new Error(
           `Parse failed: ${parseError.message}\n\n` +
           `Response preview:\n${content.substring(0, 300)}...`
