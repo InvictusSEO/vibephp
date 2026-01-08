@@ -1,7 +1,7 @@
 import type { File } from './types';
 
 // Use a model strong at following instructions
-export const MODEL_NAME = 'Qwen/Qwen2.5-Coder-32B-Instruct'; 
+export const MODEL_NAME = 'Qwen/Qwen3-235B-A22B-Instruct-2507'; 
 
 export const SYSTEM_INSTRUCTION = `
 You are VibePHP, an expert PHP Developer.
