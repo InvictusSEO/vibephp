@@ -27,7 +27,7 @@ export interface ChatState {
   isGenerating: boolean;
 }
 
-// --- AGENTIC TYPES ---
+// --- ENHANCED AGENTIC TYPES ---
 
 export type AgentState = 
   | 'IDLE' 
@@ -37,11 +37,53 @@ export type AgentState =
   | 'VERIFYING' 
   | 'ERROR_DETECTED' 
   | 'PLANNING_FIX' 
-  | 'FIX_READY';
+  | 'FIX_READY'
+  | 'APPLYING_PATCH';
 
 export interface AgentStatus {
   state: AgentState;
   message: string;
   streamContent: string;
   error?: string;
+  errorDetails?: ErrorDetails;
+  fixAttempt?: number;
+}
+
+// New: Structured Error Information
+export interface ErrorDetails {
+  type: 'syntax' | 'database' | 'runtime' | 'framework' | 'unknown';
+  file: string;
+  line?: number;
+  code?: string;
+  message: string;
+  stackTrace?: string;
+  suggestion?: string;
+}
+
+// New: Code Patch Structure
+export interface CodePatch {
+  file: string;
+  patches: Array<{
+    lineNumber: number;
+    oldCode: string;
+    newCode: string;
+    explanation: string;
+  }>;
+}
+
+// New: Fix Response from AI
+export interface FixResponse {
+  analysis: string;
+  rootCause: string;
+  fix: CodePatch;
+  confidence: number;
+}
+
+// New: Version History
+export interface CodeVersion {
+  id: string;
+  timestamp: number;
+  files: File[];
+  description: string;
+  error?: ErrorDetails;
 }
