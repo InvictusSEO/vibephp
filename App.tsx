@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { File, Message, AgentStatus, ViewMode, ErrorDetails, CodeVersion, FixResponse } from './types';
 import { INITIAL_FILES } from './constants';
-import { streamPlan, generateCode, generateFix, parseError, applyPatches } from './services/nebius';
+import { streamPlan, generateCode, generateFix, applyPatches } from './services/nebius';
 import FileExplorer from './components/FileExplorer';
 import CodeEditor from './components/CodeEditor';
 import PreviewFrame from './components/PreviewFrame';
@@ -11,6 +11,47 @@ import { AgentUI } from './components/AgentUI';
 // Backend URL
 const EXECUTOR_URL = 'https://streamingsites.eu.org/phpvibe-executor/index.php';
 const MAX_FIX_ATTEMPTS = 3;
+
+// Add parseError function locally since it's not exported from nebius
+const parseError = (backendError: any): ErrorDetails => {
+  // If backend already provides structured error
+  if (backendError.errorType && backendError.file) {
+    return {
+      type: backendError.errorType,
+      file: backendError.file,
+      line: backendError.line,
+      code: backendError.code,
+      message: backendError.error || backendError.message,
+      stackTrace: backendError.stackTrace,
+      suggestion: backendError.suggestion
+    };
+  }
+  
+  // Otherwise, parse from error string
+  const errorText = backendError.error || backendError.message || String(backendError);
+  
+  // Try to extract file and line from error message
+  const fileLineMatch = errorText.match(/in ([\w\.\/]+) on line (\d+)/i);
+  const file = fileLineMatch ? fileLineMatch[1] : 'index.php';
+  const line = fileLineMatch ? parseInt(fileLineMatch[2]) : undefined;
+  
+  // Determine error type
+  let type: ErrorDetails['type'] = 'unknown';
+  if (errorText.match(/parse error|syntax error/i)) type = 'syntax';
+  else if (errorText.match(/table.*doesn't exist|sql|database/i)) type = 'database';
+  else if (errorText.match(/undefined method|undefined function|class.*not found/i)) type = 'framework';
+  else if (errorText.match(/undefined variable|division by zero/i)) type = 'runtime';
+  
+  return {
+    type,
+    file,
+    line,
+    message: errorText,
+    code: undefined,
+    stackTrace: backendError.stackTrace,
+    suggestion: undefined
+  };
+};
 
 function App() {
   // State Hooks
