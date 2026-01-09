@@ -71,7 +71,7 @@ export interface CodePatch {
   }>;
 }
 
-// New: Fix Response from AI
+// New: Fix and Response from AI
 export interface FixResponse {
   analysis: string;
   rootCause: string;
