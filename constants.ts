@@ -1,7 +1,7 @@
 import type { File } from './types';
 
 // Using DeepSeek for best logic
-export const MODEL_NAME = 'Qwen/Qwen3-Coder-480B-A35B-Instruct';
+export const MODEL_NAME = 'moonshotai/Kimi-K2-Thinking';
 
 export const SYSTEM_INSTRUCTION = `
 You are VibePHP Senior Developer. You build PHP apps using the **Vibe Micro-Framework**.
