@@ -213,7 +213,7 @@ function App() {
       await verifyCode(newFiles);
     } catch (err: any) {
       console.error("Coding Error:", err);
-      addMessage('assistant', `❌ **Code Generation Failed:** ${err.message}`);
+addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       setAgentStatus({ state: 'IDLE', message: '', streamContent: '', fixAttempt: 0 });
     }
   };
