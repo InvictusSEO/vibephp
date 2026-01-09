@@ -8,7 +8,7 @@ const createClient = (apiKey: string) => new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
-// Fallback models
+// Fallback models 
 const FALLBACK_MODELS = [
   'moonshotai/Kimi-K2-Instruct',
   'deepseek-ai/DeepSeek-R1-0528',
