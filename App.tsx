@@ -113,7 +113,7 @@ function App() {
       if (version.files.length > 0) {
         setActiveFile(version.files[0]);
       }
-      addMessage('assistant', `✅ Restored version from ${new Date(version.timestamp).toLocaleString()}`);
+      addMessage('assistant', '✅ Restored version from ' + new Date(version.timestamp).toLocaleString());
     }
   };
 
