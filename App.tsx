@@ -172,7 +172,7 @@ function App() {
       setAgentStatus(prev => ({ ...prev, state: 'PLAN_READY' }));
     } catch (err: any) {
       console.error("Planning Error:", err);
-      addMessage('assistant', `❌ **Error:** ${err.message || "Failed to generate plan. Please check your API key and try again."}`);
+      addMessage('assistant', '❌ **Error:** ' + (err.message || "Failed to generate plan. Please check your API key and try again."));
       setAgentStatus({ state: 'IDLE', message: '', streamContent: '', fixAttempt: 0 });
     }
   };
