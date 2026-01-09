@@ -81,7 +81,7 @@ function App() {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       const newHeight = Math.min(textareaRef.current.scrollHeight, 120);
-      textareaRef.current.style.height = `${newHeight}px;
+      textareaRef.current.style.height = `${newHeight}px`;
     }
   }, [prompt]);
 
@@ -213,7 +213,7 @@ function App() {
       await verifyCode(newFiles);
     } catch (err: any) {
       console.error("Coding Error:", err);
-addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
+      addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       setAgentStatus({ state: 'IDLE', message: '', streamContent: '', fixAttempt: 0 });
     }
   };
@@ -252,7 +252,7 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       }
     } catch (err: any) {
       console.error("Verification Error:", err);
-      addMessage('assistant', `❌ **Verification Failed:** ${err.message}`);
+      addMessage('assistant', '❌ **Verification Failed:** ' + err.message);
       setAgentStatus({ state: 'IDLE', message: '', streamContent: '', fixAttempt: 0 });
     }
   };
@@ -264,13 +264,13 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
     // Save failed version
     saveVersion('Failed deployment', errorDetails);
 
-    const errorMessage = `❌ **Deployment Error**\n\n**Type:** ${errorDetails.type}\n**File:** ${errorDetails.file}\n**Line:** ${errorDetails.line || 'Unknown'}\n\n**Error:**\n${errorDetails.message}`;
+    const errorMessage = '❌ **Deployment Error**\n\n**Type:** ' + errorDetails.type + '\n**File:** ' + errorDetails.file + '\n**Line:** ' + (errorDetails.line || 'Unknown') + '\n\n**Error:**\n' + errorDetails.message;
     addMessage('assistant', errorMessage);
 
     // Check if we've exceeded max attempts
     const currentAttempt = agentStatus.fixAttempt || 0;
     if (currentAttempt >= MAX_FIX_ATTEMPTS) {
-      addMessage('assistant', `⚠️ **Maximum fix attempts (${MAX_FIX_ATTEMPTS}) reached.**\n\nPlease review the code manually or try rephrasing your request.`);
+      addMessage('assistant', '⚠️ **Maximum fix attempts (' + MAX_FIX_ATTEMPTS + ') reached.**\n\nPlease review the code manually or try rephrasing your request.');
       setAgentStatus({ 
         state: 'IDLE', 
         message: '', 
@@ -302,14 +302,14 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
     const errorDetails = agentStatus.errorDetails;
     const brokenFile = files.find(f => f.path === errorDetails.file);
     if (!brokenFile) {
-      addMessage('assistant', `❌ Cannot find file ${errorDetails.file} to fix`);
+      addMessage('assistant', '❌ Cannot find file ' + errorDetails.file + ' to fix');
       return;
     }
 
     setAgentStatus(prev => ({
       ...prev,
       state: 'PLANNING_FIX',
-      message: `Analyzing error (attempt ${(prev.fixAttempt || 0) + 1}/${MAX_FIX_ATTEMPTS})...`,
+      message: 'Analyzing error (attempt ' + ((prev.fixAttempt || 0) + 1) + '/' + MAX_FIX_ATTEMPTS + ')...',
       streamContent: 'Generating fix...'
     }));
 
@@ -319,7 +319,7 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       setCurrentFix(fixResponse);
 
       // Show fix details to user
-      const fixSummary = `**Fix Analysis:**\n\n${fixResponse.analysis}\n\n**Root Cause:** ${fixResponse.rootCause}\n\n**Proposed Changes:**\n${fixResponse.fix.patches.map(p => `- Line ${p.lineNumber}: ${p.explanation}`).join('\n')}\n\n**Confidence:** ${fixResponse.confidence}%`;
+      const fixSummary = '**Fix Analysis:**\n\n' + fixResponse.analysis + '\n\n**Root Cause:** ' + fixResponse.rootCause + '\n\n**Proposed Changes:**\n' + fixResponse.fix.patches.map(p => '- Line ' + p.lineNumber + ': ' + p.explanation).join('\n') + '\n\n**Confidence:** ' + fixResponse.confidence + '%';
       
       setAgentStatus(prev => ({
         ...prev,
@@ -329,7 +329,7 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       }));
     } catch (err: any) {
       console.error("Fix Generation Error:", err);
-      addMessage('assistant', `❌ **Fix generation failed:** ${err.message}`);
+      addMessage('assistant', '❌ **Fix generation failed:** ' + err.message);
       setAgentStatus(prev => ({ ...prev, state: 'ERROR_DETECTED', message: 'Fix generation failed' }));
     }
   };
@@ -346,7 +346,7 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
     try {
       const fileToFix = files.find(f => f.path === currentFix.fix.file);
       if (!fileToFix) {
-        throw new Error(`File ${currentFix.fix.file} not found`);
+        throw new Error('File ' + currentFix.fix.file + ' not found');
       }
 
       // Apply patches
@@ -359,8 +359,8 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       setFiles(newFiles);
 
       // Save version before testing
-      saveVersion(`Applied fix attempt ${(agentStatus.fixAttempt || 0) + 1}`, agentStatus.errorDetails);
-      addMessage('assistant', `🔧 Applied ${currentFix.fix.patches.length} fix(es) to ${currentFix.fix.file}. Testing now...`);
+      saveVersion('Applied fix attempt ' + ((agentStatus.fixAttempt || 0) + 1), agentStatus.errorDetails);
+      addMessage('assistant', '🔧 Applied ' + currentFix.fix.patches.length + ' fix(es) to ' + currentFix.fix.file + '. Testing now...');
 
       // Increment fix attempt counter
       setAgentStatus(prev => ({ ...prev, fixAttempt: (prev.fixAttempt || 0) + 1 }));
@@ -372,7 +372,7 @@ addMessage('assistant', '❌ **Code Generation Failed:** ' + err.message);
       await verifyCode(newFiles);
     } catch (err: any) {
       console.error("Fix Application Error:", err);
-      addMessage('assistant', `❌ **Failed to apply fix:** ${err.message}`);
+      addMessage('assistant', '❌ **Failed to apply fix:** ' + err.message);
       setAgentStatus(prev => ({ ...prev, state: 'ERROR_DETECTED', message: 'Fix application failed' }));
     }
   };
