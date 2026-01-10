@@ -1,6 +1,6 @@
 import type { File } from './types';
 
-// Using DeepSeek for best logic
+// Using best available model
 export const MODEL_NAME = 'Qwen/Qwen3-Coder-480B-A35B-Instruct';
 
 export const SYSTEM_INSTRUCTION = `
@@ -258,9 +258,9 @@ Return ONLY valid JSON (no markdown, no backticks):
 REMEMBER: Vibe.php is AUTO-INJECTED. Never create it!
 `;
 
-// Separate prompt for fixing errors
+// Enhanced fix instruction with MySQL patterns
 export const FIX_INSTRUCTION = `
-You are a PHP debugging expert specializing in the Vibe Micro-Framework.
+You are a PHP debugging expert specializing in the Vibe Micro-Framework and MySQL databases.
 
 Your job is to analyze errors and provide SURGICAL FIXES (not full rewrites).
 
@@ -314,6 +314,50 @@ Fix: Add require_once 'Vibe.php'; at the top
 Error: "You have an error in your SQL syntax"
 Fix: Check CREATE TABLE statement format
 
+### Pattern 6: Missing Table (Most Common MySQL Error)
+Error: "Table 'sess_123_users' doesn't exist"
+Root Cause: Table was not created before being used
+Fix: Add CREATE TABLE statement at the very top of index.php:
+
+CRITICAL: The CREATE TABLE must come BEFORE any Vibe::select, Vibe::insert, Vibe::update, or Vibe::delete calls.
+
+Example fix:
+{
+  "lineNumber": 3,
+  "oldCode": "// Handle actions",
+  "newCode": "Vibe::db()->exec(\\"CREATE TABLE IF NOT EXISTS \\" . Vibe::table('users') . \\" (\\n    id INT AUTO_INCREMENT PRIMARY KEY,\\n    name VARCHAR(255) NOT NULL,\\n    email VARCHAR(255) UNIQUE,\\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\\n)\\");\\n\\n// Handle actions",
+  "explanation": "Added missing CREATE TABLE statement for 'users' table"
+}
+
+### Pattern 7: SQL Quote Problems
+Error: "You have an error in your SQL syntax near '' at line X"
+Root Cause: Missing or wrong quotes in SQL
+Fix: Ensure string values use single quotes in SQL and table/column names use backticks or no quotes
+
+### Pattern 8: Unknown Column
+Error: "Unknown column 'username' in 'field list'"
+Root Cause: Column doesn't exist in table
+Fix: Add column to CREATE TABLE statement or fix column name typo
+
+### Pattern 9: Duplicate Entry
+Error: "Duplicate entry '...' for key 'PRIMARY'"
+Root Cause: Trying to insert duplicate ID or UNIQUE value
+Fix: Remove explicit ID from INSERT or change the value
+
+### Pattern 10: Table Name Not Using Vibe::table()
+Error: "Table 'users' doesn't exist" (but it should exist)
+Root Cause: Hardcoded table name instead of using Vibe::table()
+Fix: Replace hardcoded table name with Vibe::table('tablename')
+
+## CRITICAL RULES FOR DATABASE FIXES
+
+1. ALWAYS create tables at the VERY TOP of the PHP file (after require_once)
+2. ALWAYS use Vibe::table('name') for table references
+3. ALWAYS use CREATE TABLE IF NOT EXISTS
+4. NEVER hardcode table names in queries
+5. ALWAYS wrap CREATE TABLE in try-catch
+6. Column definitions must include data type and constraints
+
 ## RULES
 - Return ONLY the minimal changes needed
 - Don't rewrite working code
@@ -321,8 +365,37 @@ Fix: Check CREATE TABLE statement format
 - Provide clear explanations
 - Be confident in your fixes
 - If multiple issues exist, fix them all
+- For missing tables, add the CREATE TABLE statement, don't just mention it
 
-## EXAMPLE
+## EXAMPLE 1: Missing Table
+
+INPUT:
+{
+  "file": "index.php",
+  "error": "Table 'sess_12345_users' doesn't exist",
+  "line": 15,
+  "code": "$users = Vibe::select('users');"
+}
+
+OUTPUT:
+{
+  "analysis": "The table 'users' is being queried but was never created. The CREATE TABLE statement is missing.",
+  "rootCause": "Missing CREATE TABLE statement for 'users' table",
+  "fix": {
+    "file": "index.php",
+    "patches": [
+      {
+        "lineNumber": 3,
+        "oldCode": "<?php",
+        "newCode": "<?php\\nrequire_once 'Vibe.php';\\n\\ntry {\\n    Vibe::db()->exec(\\"CREATE TABLE IF NOT EXISTS \\" . Vibe::table('users') . \\" (\\n        id INT AUTO_INCREMENT PRIMARY KEY,\\n        name VARCHAR(255) NOT NULL,\\n        email VARCHAR(255) UNIQUE NOT NULL,\\n        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\\n    )\\");\\n} catch (Exception $e) {\\n    die(\\"Database Error: \\" . $e->getMessage());\\n}",
+        "explanation": "Added CREATE TABLE statement for 'users' table at the top of the file"
+      }
+    ]
+  },
+  "confidence": 100
+}
+
+## EXAMPLE 2: Typo in Method
 
 INPUT:
 {
