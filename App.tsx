@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { File, Message, AgentStatus, ViewMode, ErrorDetails, CodeVersion, FixResponse } from './types';
 import { INITIAL_FILES } from './constants';
-import { streamPlan, generateCode, generateFix, applyPatches } from './services/nebius';
+import { streamPlan, generateCode, generateFix, parseError, applyPatches } from './services/nebius';
 import FileExplorer from './components/FileExplorer';
 import CodeEditor from './components/CodeEditor';
 import PreviewFrame from './components/PreviewFrame';
@@ -11,47 +11,6 @@ import { AgentUI } from './components/AgentUI';
 // Backend URL
 const EXECUTOR_URL = 'https://streamingsites.eu.org/phpvibe-executor/index.php';
 const MAX_FIX_ATTEMPTS = 3;
-
-// Add parseError function locally since it's not exported from nebius
-const parseError = (backendError: any): ErrorDetails => {
-  // If backend already provides structured error
-  if (backendError.errorType && backendError.file) {
-    return {
-      type: backendError.errorType,
-      file: backendError.file,
-      line: backendError.line,
-      code: backendError.code,
-      message: backendError.error || backendError.message,
-      stackTrace: backendError.stackTrace,
-      suggestion: backendError.suggestion
-    };
-  }
-  
-  // Otherwise, parse from error string
-  const errorText = backendError.error || backendError.message || String(backendError);
-  
-  // Try to extract file and line from error message
-  const fileLineMatch = errorText.match(/in ([\w\.\/]+) on line (\d+)/i);
-  const file = fileLineMatch ? fileLineMatch[1] : 'index.php';
-  const line = fileLineMatch ? parseInt(fileLineMatch[2]) : undefined;
-  
-  // Determine error type
-  let type: ErrorDetails['type'] = 'unknown';
-  if (errorText.match(/parse error|syntax error/i)) type = 'syntax';
-  else if (errorText.match(/table.*doesn't exist|sql|database/i)) type = 'database';
-  else if (errorText.match(/undefined method|undefined function|class.*not found/i)) type = 'framework';
-  else if (errorText.match(/undefined variable|division by zero/i)) type = 'runtime';
-  
-  return {
-    type,
-    file,
-    line,
-    message: errorText,
-    code: undefined,
-    stackTrace: backendError.stackTrace,
-    suggestion: undefined
-  };
-};
 
 function App() {
   // State Hooks
@@ -305,7 +264,7 @@ function App() {
     // Save failed version
     saveVersion('Failed deployment', errorDetails);
 
-    const errorMessage = '❌ **Deployment Error**\n\n**Type:** ' + errorDetails.type + '\n**File:** ' + errorDetails.file + '\n**Line:** ' + (errorDetails.line || 'Unknown') + '\n\n**Error:**\n' + errorDetails.message;
+    const errorMessage = '❌ **Deployment Error**\n\n**Type:** ' + errorDetails.type + '\n**File:** ' + errorDetails.file + '\n**Line:** ' + (errorDetails.line || 'Unknown') + '\n\n**Error:**\n' + errorDetails.message + (errorDetails.suggestion ? '\n\n**Suggestion:**\n' + errorDetails.suggestion : '');
     addMessage('assistant', errorMessage);
 
     // Check if we've exceeded max attempts
@@ -445,7 +404,6 @@ function App() {
   };
 
   const usingEnvKey = !!import.meta.env.VITE_NEBIUS_API_KEY;
-
   // Render
   return (
     <div className="flex flex-col h-[100dvh] bg-gray-950 text-gray-100 overflow-hidden font-sans">
@@ -455,8 +413,10 @@ function App() {
           <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 max-w-md w-full">
             <h2 className="text-xl font-bold text-white mb-4 text-center">🔑 API Key Required</h2>
             <p className="text-gray-400 text-sm mb-4 text-center">
-              Get your free API key from 
-              <a href="https://studio.nebius.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline"> Nebius Studio</a>
+              Get your free API key from{' '}
+              <a href="https://studio.nebius.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+                Nebius Studio
+              </a>
             </p>
             <input
               type="password"
@@ -562,7 +522,7 @@ function App() {
               <h1 className="font-bold text-lg tracking-tight">VibePHP</h1>
               <p className="text-xs text-gray-400">AI PHP App Generator</p>
             </div>
-            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-medium">DeepSeek</span>
+            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-medium">Qwen Coder</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex bg-gray-800 p-1 rounded-lg">
@@ -635,6 +595,7 @@ function App() {
                     placeholder="Describe your PHP app idea..."
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500 resize-none pr-12 min-h-[56px] max-h-[120px]"
                     rows={1}
+                    disabled={agentStatus.state !== 'IDLE'}
                   />
                   <button
                     type="submit"
@@ -688,7 +649,7 @@ function App() {
             </div>
           </div>
         )}
-
+        
         {/* Desktop Main Content */}
         {!isMobile && (
           <div className="flex-1 flex flex-col bg-gray-950">
